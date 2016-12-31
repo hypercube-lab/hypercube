@@ -35,3 +35,4 @@ pub enum Instruction {
     /// Vote for a PoH that is equal to the lastid of this transaction
     NewVote(Vote),
 }
+

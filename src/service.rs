@@ -5,3 +5,4 @@ pub trait Service {
 
     fn join(self) -> Result<Self::JoinReturnType>;
 }
+

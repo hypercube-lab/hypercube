@@ -426,3 +426,4 @@ mod tests {
         assert_eq!(highest_index, 2 * leader_rotation_interval - 1);
     }
 }
+

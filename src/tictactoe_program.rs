@@ -479,3 +479,4 @@ mod test {
         assert_eq!(g.state, State::XMove);
     }
 }
+

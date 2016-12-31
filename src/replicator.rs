@@ -199,3 +199,4 @@ mod tests {
         let _ignored = remove_dir_all(&replicator_ledger_path);
     }
 }
+

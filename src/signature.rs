@@ -138,3 +138,4 @@ mod tests {
         assert_eq!(gen_n_pubkeys(seed, 50), gen_n_pubkeys(seed, 50));
     }
 }
+

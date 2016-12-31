@@ -90,3 +90,4 @@ mod tests {
         assert!(entries[..].verify(&entries[0].id));
     }
 }
+

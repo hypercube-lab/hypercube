@@ -228,3 +228,4 @@ mod tests {
         assert_eq!(fin_plan, Budget::new_authorized_payment(from1, 42, to));
     }
 }
+

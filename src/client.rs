@@ -18,3 +18,4 @@ pub fn mk_client(r: &NodeInfo) -> ThinClient {
         transactions_socket,
     )
 }
+

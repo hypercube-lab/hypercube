@@ -332,3 +332,4 @@ mod tests {
         assert_eq!(result, DEFAULT_WEIGHT);
     }
 }
+

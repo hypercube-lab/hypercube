@@ -84,3 +84,4 @@ mod tests {
         d.close().expect("thread join");
     }
 }
+
