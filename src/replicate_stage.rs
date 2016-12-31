@@ -147,4 +147,3 @@ impl Service for ReplicateStage {
         Ok(())
     }
 }
-

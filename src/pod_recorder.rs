@@ -93,4 +93,3 @@ mod tests {
         assert!(pod_recorder.tick().is_err());
     }
 }
-

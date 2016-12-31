@@ -412,4 +412,3 @@ mod tests {
         assert_eq!(transaction_processor.get_balance(&alice.pubkey()), 1);
     }
 }
-

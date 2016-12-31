@@ -70,4 +70,3 @@ impl Service for StoreLedgerStage {
         Ok(())
     }
 }
-

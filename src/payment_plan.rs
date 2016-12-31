@@ -25,4 +25,3 @@ pub struct Payment {
     /// The `Pubkey` that `tokens` should be paid to.
     pub to: Pubkey,
 }
-

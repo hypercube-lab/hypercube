@@ -45,4 +45,3 @@ impl Service for BlobFetchStage {
         Ok(())
     }
 }
-

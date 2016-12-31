@@ -123,4 +123,3 @@ mod tests {
         assert_eq!(entries, mint.create_entries());
     }
 }
-

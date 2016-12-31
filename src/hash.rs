@@ -73,4 +73,3 @@ pub fn extend_and_hash(id: &Hash, val: &[u8]) -> Hash {
     hash_data.extend_from_slice(val);
     hash(&hash_data)
 }
-

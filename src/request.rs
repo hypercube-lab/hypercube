@@ -41,4 +41,3 @@ pub enum Response {
         time: usize,
     },
 }
-

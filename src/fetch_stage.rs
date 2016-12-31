@@ -46,4 +46,3 @@ impl Service for FetchStage {
         Ok(())
     }
 }
-

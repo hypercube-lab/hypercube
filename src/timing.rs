@@ -20,4 +20,3 @@ pub fn timestamp() -> u64 {
         .expect("create timestamp in timing");
     duration_as_ms(&now)
 }
-

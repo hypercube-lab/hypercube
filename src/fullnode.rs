@@ -713,4 +713,3 @@ mod tests {
         remove_dir_all(&validator_ledger_path).unwrap();
     }
 }
-

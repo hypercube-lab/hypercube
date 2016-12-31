@@ -679,4 +679,3 @@ mod tests {
         remove_dir_all(ledger_path).unwrap();
     }
 }
-

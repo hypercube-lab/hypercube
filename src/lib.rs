@@ -114,4 +114,3 @@ extern crate matches;
 
 extern crate influx_db_client;
 extern crate rand;
-

@@ -1147,4 +1147,3 @@ mod tests {
         assert!(transaction_processor.process_transaction(&tx).is_err());
     }
 }
-

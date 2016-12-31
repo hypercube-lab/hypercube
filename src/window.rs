@@ -563,4 +563,3 @@ mod test {
         assert_eq!(wrap_blob_idx_in_window(&id, 101, 90, 100), (true, 101));
     }
 }
-
