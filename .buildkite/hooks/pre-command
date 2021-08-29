@@ -1,0 +1,27 @@
+#!/bin/bash -e
+
+# Ensure the pattern "+++ ..." never occurs when |set -x| is set, as buildkite
+# interprets this as the start of a log group.
+# Ref: https://buildkite.com/docs/pipelines/managing-log-output
+export PS4="++"
+
+#
+# Restore target/ from the previous CI build on this machine
+#
+[[ -n "$CARGO_TARGET_CACHE_NAME" ]] || (
+  d=$HOME/cargo-target-cache/"$CARGO_TARGET_CACHE_NAME"
+
+  if [[ -d $d ]]; then
+    du -hs "$d"
+    read -r cacheSizeInGB _ < <(du -s --block-size=1000000000 "$d")
+    if [[ $cacheSizeInGB -gt 5 ]]; then
+      echo "$d has gotten too large, removing it"
+      rm -rf "$d"
+    fi
+  fi
+
+  mkdir -p "$d"/target
+  set -x
+  rsync -a --delete --link-dest="$d" "$d"/target .
+)
+

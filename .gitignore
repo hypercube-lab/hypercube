@@ -1,0 +1,16 @@
+Cargo.lock
+/target/
+
+**/*.rs.bk
+.cargo
+
+# node configuration files
+/config/
+/config-private/
+/config-drone/
+/config-validator/
+/config-client/
+/multinode-demo/test/config-client/
+
+# test temp files, ledgers, etc.
+/farf/

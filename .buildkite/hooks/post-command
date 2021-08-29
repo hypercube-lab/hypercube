@@ -1,0 +1,45 @@
+#!/bin/bash -e
+
+#
+# Save target/ for the next CI build on this machine
+#
+if [[ -n $CARGO_TARGET_CACHE_NAME ]]; then
+  (
+    d=$HOME/cargo-target-cache/"$CARGO_TARGET_CACHE_NAME"
+    mkdir -p "$d"
+    set -x
+    rsync -a --delete --link-dest="$PWD" target "$d"
+    du -hs "$d"
+  )
+fi
+
+#
+# Add job_stats data point
+#
+if [[ -z $CI_BUILD_START ]]; then
+  echo Error: CI_BUILD_START empty
+else
+  CI_BUILD_DURATION=$(( $(date +%s) - CI_BUILD_START + 1 ))
+
+  CI_LABEL=${BUILDKITE_LABEL:-build label missing}
+
+  PR=false
+  if [[ $BUILDKITE_BRANCH =~ pull/* ]]; then
+    PR=true
+  fi
+
+  SUCCESS=true
+  if [[ $BUILDKITE_COMMAND_EXIT_STATUS != 0 ]]; then
+    SUCCESS=false
+  fi
+
+  point_tags="pipeline=$BUILDKITE_PIPELINE_SLUG,job=$CI_LABEL,pr=$PR,success=$SUCCESS"
+  point_tags="${point_tags// /\\ }"  # Escape spaces
+
+  point_fields="duration=$CI_BUILD_DURATION"
+  point_fields="${point_fields// /\\ }"  # Escape spaces
+
+  point="job_stats,$point_tags $point_fields"
+
+  scripts/metrics-write-datapoint.sh "$point" || true
+fi
