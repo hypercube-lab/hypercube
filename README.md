@@ -3,11 +3,11 @@
 HyperCube is a free and open source blockchain project for everyone to use. 
 
 
-## Definition
+## What is HyperCube
 
 HyperCube is an Ethereum 2-layer solution based on proof of POD dedication and an independent public chain.
 
-## Formal State
+## Formal Definition of HyperCube
 
 HyperCube's network is an independent public chain written in Rust language based on PoD consensus.
 
