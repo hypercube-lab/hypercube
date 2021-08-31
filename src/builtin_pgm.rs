@@ -15,7 +15,7 @@ pub enum SystemProgram {
     /// * Transaction::keys[1] - new account key
     /// * tokens - number of tokens to transfer to the new account
     /// * space - memory to allocate if greater then zero
-    /// * program_id - the program id of the new account
+    /// * program_id - program id is a unique identifier for each builtin program
     CreateAccount {
         tokens: i64,
         space: u64,
