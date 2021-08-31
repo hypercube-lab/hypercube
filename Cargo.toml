@@ -3,9 +3,9 @@ name = "hypercube"
 description = "Blockchain, Rebuilt for Scale"
 version = "0.9.0"
 documentation = "https://docs.rs/hypercube"
-homepage = "http://hypercube-lab.org/"
+homepage = "http://hypercube-lag.github.io/"
 readme = "README.md"
-repository = "https://github.com/hypercube-labs/hypercube"
+repository = "https://github.com/hypercube-lab/hypercube"
 authors = [
     "John Casper<john@hypercube-lab.org>",
     "Shawn Buzzwick<lester@hypercube-lab.org>",
