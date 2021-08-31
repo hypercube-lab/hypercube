@@ -155,3 +155,15 @@ XPZ（全称HyperCube）公链支持NFT铸造，社交代币，DeFi，金融应�
 
 * 传统美国资本包括背书
 
+ * 罗斯柴尔德家族基金
+ 
+ * 方舟投资
+ 
+ * Pantera 投资
+ 
+ * Grayscale Investmetns
+ 
+ * Coinbase Investments
+ 
+ * Celestial Investments
+
