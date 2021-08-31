@@ -1,4 +1,4 @@
-# XPZ Public Chain
+# HyperCube Public Smart Contract Platform
 
 HyperCube is a free and open source blockchain project for everyone to use.
 
