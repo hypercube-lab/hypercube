@@ -1,4 +1,4 @@
-# XPZ Public Chain
+# HyperCube Public Smart Contract Platform
 
 HyperCube is a free and open source blockchain project for everyone to use.
 
@@ -154,4 +154,16 @@ XPZ（全称HyperCube）公链支持NFT铸造，社交代币，DeFi，金融应�
 * IEEE等国际区块链标准组织的背书
 
 * 传统美国资本包括背书
+
+ * 罗斯柴尔德家族基金
+ 
+ * 方舟投资
+ 
+ * Pantera 投资
+ 
+ * Grayscale Investmetns
+ 
+ * Coinbase Investments
+ 
+ * Celestial Investments
 
