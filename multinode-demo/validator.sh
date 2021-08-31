@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Start a validator node
+# Run a Validator Node
 #
 here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
