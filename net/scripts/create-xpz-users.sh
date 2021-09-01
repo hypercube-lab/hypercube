@@ -24,4 +24,3 @@ sudo -u hypercube bash -c "
     StrictHostKeyChecking no
   \" > config
 "
-

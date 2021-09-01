@@ -1,12 +1,7 @@
 HyperCube Coding Guidelines
 ===
 
-The goal of these guidelines is to improve developer productivity by allowing developers to
-jump any file in the codebase and not need to adapt to inconsistencies in how the code is
-written. The codebase should appear as if it had been authored by a single developer. If you
-don't agree with a convention, submit a PR patching this document and let's discuss! Once
-the PR is accepted, *all* code should be updated as soon as possible to reflect the new
-conventions.
+The objective of these recommendations is to increase developer productivity by providing the ability to navigate the code quickly, without the necessity of adapting to inconsistency in coding. The code should look like it was made by a single person. Even if you disagree with the convention, you can just patch this document with a PR and we can talk about it. Once the PR is finalized, all the code should be modified to match the new conventions as quickly as possible.
 
 Rust coding conventions
 ---
