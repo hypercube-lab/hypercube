@@ -1,3 +1,15 @@
+<p align="center">
+  <a href="https://hypercube-lab.github.io">
+    <img alt="HyperCube" src="https://i.imgur.com/uBVzyX3.png" width="250" />
+  </a>
+</p>
+
+[![HyperCube crate](https://img.shields.io/crates/v/hypercube.svg)](https://crates.io/crates/hypercube)
+[![HyperCube documentation](https://docs.rs/hypercube-lab/badge.svg)](https://docs.rs/hypercu)
+[![Build status](https://badge.buildkite.com/8cc350de251d61483db98bdfc895b9ea0ac8ffa4a32ee850ed.svg?branch=master)](https://buildkite.com/hypercube-lab/hypercube/builds?branch=master)
+[![codecov](https://codecov.io/gh/hypercube-lab/solana/branch/master/graph/badge.svg)](https://codecov.io/gh/hypercube-lab/hypercube)
+
+
 # XPZ Public Chain
 
 HyperCube is a free and open source blockchain project for everyone to use.
@@ -9,7 +21,9 @@ HyperCube is a free and open source blockchain project for everyone to use.
 
 [正體中文](https://github.com/hypercube-lab/hypercube/blob/main/README_CN_TW.md)
 
-## Definition
+[HyperCube Wiki](https://github.com/hypercube-lab/hypercube/wiki)
+
+## Wha is HyperCube
 
 HyperCube is an Ethereum 2-layer solution based on proof of POD dedication and an independent public chain.
 

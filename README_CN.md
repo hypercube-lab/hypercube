@@ -86,8 +86,12 @@ Coinbase Ventures 始终致力于为全世界创建一个开放的金融系统�
 
 #### Ark Investments
 
+Ark Investments是注册美国的风险投资公式，主要面向新科技、云计算、AI、区块链行业，是美国甚至全球领先的投资基金。
 
-#### Celestil Investments
+#### Celestial Investments
 
+Celestial Investments是全球的私募股权投资机构，专注于成长性投资。Celestial Investments管理逾5亿美元的私募股权资产，投资于12家企业。Celestial Investments是企业家和管理团队的优秀伙伴，致力于帮助企业长期发展。
 
 #### Pantera Investments
+
+Pantera Investments是一家专注于高科技类企业的商业机构，为企业提供创业投资资金和金融服务。Pantera Investments投资于早期高科技类企业，为企业提供资金并持久支持企业从机会中创造价值。是一家积极的创业投资机构。
