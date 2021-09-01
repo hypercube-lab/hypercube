@@ -1,6 +1,6 @@
 # Smart Contracts Engine
  
-The goal of this RFC is to define a set of constraints for APIs and runtime such that we can execute our smart contracts safely on massively parallel hardware such as a GPU.  Our runtime is built around an OS *syscall* primitive.  The difference in blockchain is that now the OS does a cryptographic check of memory region ownership before accessing the memory in the HyperCube kernel.
+This RFC aims to create a set of restrictions for APIs and runtime to help us use our smart contracts on technology such as GPUs, where our smart contracts will be safer. Our runtime has an OS system call at its core. A major improvement in the HyperCube is the utilization of a memory verification protocol before memory access in the kernel. The system verifies ownership of the memory region first before using it.
 
 ## Version
 

@@ -1,13 +1,13 @@
-# XPZ Public Chain
+# HyperCube Public Smart Contract Platform
 
-HyperCube is a free and open source blockchain project for everyone to use.
+HyperCube is a free and open source blockchain project for everyone to use. 
 
 
-## Definition
+## What is HyperCube
 
 HyperCube is an Ethereum 2-layer solution based on proof of POD dedication and an independent public chain.
 
-## Formal State
+## Formal Definition of HyperCube
 
 HyperCube's network is an independent public chain written in Rust language based on PoD consensus.
 
@@ -141,7 +141,7 @@ XPZ（全称HyperCube）公链支持NFT铸造，社交代币，DeFi，金融应�
 
 * XPZ核心提供EVM通用的XVM（XPZ虚拟机），速度优于EVM，可以使以太坊开发者快速上手
 
-* 低Gas费，快速响应
+* XPZ公链提供了基于LLVM的XVM虚拟机，这种架构可以快速提升智能合约运行速度
 
 * 雅典娜SDK可以提供快速铸造NFT，低成本的数字艺术创作
 
@@ -154,4 +154,16 @@ XPZ（全称HyperCube）公链支持NFT铸造，社交代币，DeFi，金融应�
 * IEEE等国际区块链标准组织的背书
 
 * 传统美国资本包括背书
+
+ * 罗斯柴尔德家族基金
+ 
+ * 方舟投资
+ 
+ * Pantera 投资
+ 
+ * Grayscale Investmetns
+ 
+ * Coinbase Investments
+ 
+ * Celestial Investments
 
