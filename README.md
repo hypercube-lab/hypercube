@@ -7,7 +7,7 @@ HyperCube is a free and open source blockchain project for everyone to use.
 
 [简体中文](https://github.com/hypercube-lab/hypercube/blob/main/README_CN.md)
 
-[简体中文](https://github.com/hypercube-lab/hypercube/blob/main/README_CN.md)
+[正體中文](https://github.com/hypercube-lab/hypercube/blob/main/README_CN_TW.md)
 
 ## Definition
 
