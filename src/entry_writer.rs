@@ -1,22 +1,22 @@
 //! The `entry_writer` module helps implement the TPU's write stage. It
 //! writes entries to the given writer, which is typically a file or
-//! stdout, and then sends the Entry to its output channel.
+//! stdout, and then sends the Entry to its outx_creatort channel.
 
-use bank::Bank;
+use transaction_processor::TransactionProcessor;
 use bincode;
 use entry::Entry;
 use std::io::{self, BufRead, Error, ErrorKind, Write};
 use std::mem::size_of;
 
 pub struct EntryWriter<'a, W> {
-    bank: &'a Bank,
+    transaction_processor: &'a TransactionProcessor,
     writer: W,
 }
 
 impl<'a, W: Write> EntryWriter<'a, W> {
-    /// Create a new Tpu that wraps the given Bank.
-    pub fn new(bank: &'a Bank, writer: W) -> Self {
-        EntryWriter { bank, writer }
+    /// Create a new TxCreator that wraps the given TransactionProcessor.
+    pub fn new(transaction_processor: &'a TransactionProcessor, writer: W) -> Self {
+        EntryWriter { transaction_processor, writer }
     }
 
     fn write_entry(writer: &mut W, entry: &Entry) -> io::Result<()> {
@@ -44,7 +44,7 @@ impl<'a, W: Write> EntryWriter<'a, W> {
 
     fn write_and_register_entry(&mut self, entry: &Entry) -> io::Result<()> {
         trace!("write_and_register_entry entry");
-        self.bank.register_entry_id(&entry.id);
+        self.transaction_processor.register_entry_id(&entry.id);
 
         Self::write_entry(&mut self.writer, entry)
     }

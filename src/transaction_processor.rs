@@ -1,4 +1,4 @@
-//! The `bank` module tracks client accounts and the progress of smart
+//! The `transaction_processor` module tracks client accounts and the progress of smart
 //! contracts. It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
@@ -34,8 +34,8 @@ use timing::{duration_as_us, timestamp};
 use transaction::Transaction;
 use window::WINDOW_SIZE;
 
-/// The number of most recent `last_id` values that the bank will track the signatures
-/// of. Once the bank discards a `last_id`, it will reject any transactions that use
+/// The number of most recent `last_id` values that the transaction_processor will track the signatures
+/// of. Once the transaction_processor discards a `last_id`, it will reject any transactions that use
 /// that `last_id` in a transaction. Lowering this value reduces memory consumption,
 /// but requires clients to update its `last_id` more frequently. Raising the value
 /// lengthens the time a client must wait to be certain a missing transaction will
@@ -46,23 +46,23 @@ pub const VERIFY_BLOCK_SIZE: usize = 16;
 
 /// Reasons a transaction might be rejected.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum BankError {
+pub enum TransactionProcessorError {
     /// Attempt to debit from `Pubkey`, but no found no record of a prior credit.
     AccountNotFound,
 
     /// The from `Pubkey` does not have sufficient balance to pay the fee to schedule the transaction
     InsufficientFundsForFee,
 
-    /// The bank has seen `Signature` before. This can occur under normal operation
+    /// The transaction_processor has seen `Signature` before. This can occur under normal operation
     /// when a UDP packet is duplicated, as a user error from a client not updating
     /// its `last_id`, or as a double-spend attack.
     DuplicateSignature,
 
-    /// The bank has not seen the given `last_id` or the transaction is too old and
+    /// The transaction_processor has not seen the given `last_id` or the transaction is too old and
     /// the `last_id` has been discarded.
     LastIdNotFound,
 
-    /// The bank has not seen a transaction with the given `Signature` or the transaction is
+    /// The transaction_processor has not seen a transaction with the given `Signature` or the transaction is
     /// too old and has been discarded.
     SignatureNotFound,
 
@@ -88,7 +88,7 @@ pub enum BankError {
     ProgramRuntimeError,
 }
 
-pub type Result<T> = result::Result<T, BankError>;
+pub type Result<T> = result::Result<T, TransactionProcessorError>;
 type SignatureStatusMap = HashMap<Signature, Result<()>>;
 
 #[derive(Default)]
@@ -99,7 +99,7 @@ struct ErrorCounters {
 }
 
 /// The state of all accounts and contracts after processing its entries.
-pub struct Bank {
+pub struct TransactionProcessor {
     /// A map of account public keys to the balance in that account.
     accounts: RwLock<HashMap<Pubkey, Account>>,
 
@@ -108,16 +108,16 @@ pub struct Bank {
     /// values are so old that the `last_id` has been pulled out of the queue.
     last_ids: RwLock<VecDeque<Hash>>,
 
-    /// Mapping of hashes to signature sets along with timestamp. The bank uses this data to
+    /// Mapping of hashes to signature sets along with timestamp. The transaction_processor uses this data to
     /// reject transactions with signatures its seen before
     last_ids_sigs: RwLock<HashMap<Hash, (SignatureStatusMap, u64)>>,
 
-    /// The number of transactions the bank has processed without error since the
+    /// The number of transactions the transaction_processor has processed without error since the
     /// start of the ledger.
     transaction_count: AtomicUsize,
 
     /// This bool allows us to submit metrics that are specific for leaders or validators
-    /// It is set to `true` by fullnode before creating the bank.
+    /// It is set to `true` by fullnode before creating the transaction_processor.
     pub is_leader: bool,
 
     // The latest finality time for the network
@@ -127,9 +127,9 @@ pub struct Bank {
     loaded_contracts: RwLock<HashMap<Pubkey, DynamicProgram>>,
 }
 
-impl Default for Bank {
+impl Default for TransactionProcessor {
     fn default() -> Self {
-        Bank {
+        TransactionProcessor {
             accounts: RwLock::new(HashMap::new()),
             last_ids: RwLock::new(VecDeque::new()),
             last_ids_sigs: RwLock::new(HashMap::new()),
@@ -141,33 +141,33 @@ impl Default for Bank {
     }
 }
 
-impl Bank {
-    /// Create a default Bank
+impl TransactionProcessor {
+    /// Create a default TransactionProcessor
     pub fn new_default(is_leader: bool) -> Self {
-        let mut bank = Bank::default();
-        bank.is_leader = is_leader;
-        bank
+        let mut transaction_processor = TransactionProcessor::default();
+        transaction_processor.is_leader = is_leader;
+        transaction_processor
     }
-    /// Create an Bank using a deposit.
+    /// Create an TransactionProcessor using a deposit.
     pub fn new_from_deposit(deposit: &Payment) -> Self {
-        let bank = Self::default();
+        let transaction_processor = Self::default();
         {
-            let mut accounts = bank.accounts.write().unwrap();
+            let mut accounts = transaction_processor.accounts.write().unwrap();
             let account = accounts.entry(deposit.to).or_insert_with(Account::default);
             Self::apply_payment(deposit, account);
         }
-        bank
+        transaction_processor
     }
 
-    /// Create an Bank with only a Mint. Typically used by unit tests.
+    /// Create an TransactionProcessor with only a Mint. Typically used by unit tests.
     pub fn new(mint: &Mint) -> Self {
         let deposit = Payment {
             to: mint.pubkey(),
             tokens: mint.tokens,
         };
-        let bank = Self::new_from_deposit(&deposit);
-        bank.register_entry_id(&mint.last_id());
-        bank
+        let transaction_processor = Self::new_from_deposit(&deposit);
+        transaction_processor.register_entry_id(&mint.last_id());
+        transaction_processor
     }
 
     /// Commit funds to the given account
@@ -186,10 +186,10 @@ impl Bank {
         *last_item
     }
 
-    /// Store the given signature. The bank will reject any transaction with the same signature.
+    /// Store the given signature. The transaction_processor will reject any transaction with the same signature.
     fn reserve_signature(signatures: &mut SignatureStatusMap, signature: &Signature) -> Result<()> {
         if let Some(_result) = signatures.get(signature) {
-            return Err(BankError::DuplicateSignature);
+            return Err(TransactionProcessorError::DuplicateSignature);
         }
         signatures.insert(*signature, Ok(()));
         Ok(())
@@ -211,7 +211,7 @@ impl Bank {
         {
             return Self::reserve_signature(&mut entry.0, signature);
         }
-        Err(BankError::LastIdNotFound)
+        Err(TransactionProcessorError::LastIdNotFound)
     }
 
     fn update_signature_status(
@@ -256,10 +256,10 @@ impl Bank {
         ret
     }
 
-    /// Tell the bank which Entry IDs exist on the ledger. This function
+    /// Tell the transaction_processor which Entry IDs exist on the ledger. This function
     /// assumes subsequent calls correspond to later entries, and will boot
     /// the oldest ones once its internal cache is full. Once boot, the
-    /// bank will reject transactions using that `last_id`.
+    /// transaction_processor will reject transactions using that `last_id`.
     pub fn register_entry_id(&self, last_id: &Hash) {
         let mut last_ids = self
             .last_ids
@@ -277,7 +277,7 @@ impl Bank {
         last_ids.push_back(*last_id);
     }
 
-    /// Process a Transaction. This is used for unit tests and simply calls the vector Bank::process_transactions method.
+    /// Process a Transaction. This is used for unit tests and simply calls the vector TransactionProcessor::process_transactions method.
     pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
         match self.process_transactions(&[tx.clone()])[0] {
             Err(ref e) => {
@@ -307,9 +307,9 @@ impl Bank {
                     error_counters.account_not_found_vote += 1;
                 }
             }
-            Err(BankError::AccountNotFound)
+            Err(TransactionProcessorError::AccountNotFound)
         } else if accounts.get(&tx.keys[0]).unwrap().tokens < tx.fee {
-            Err(BankError::InsufficientFundsForFee)
+            Err(TransactionProcessorError::InsufficientFundsForFee)
         } else {
             let mut called_accounts: Vec<Account> = tx
                 .keys
@@ -348,14 +348,14 @@ impl Bank {
                 && SystemProgram::check_id(&pre_program_id)))
         {
             //TODO, this maybe redundant bpf should be able to guarantee this property
-            return Err(BankError::ModifiedContractId);
+            return Err(TransactionProcessorError::ModifiedContractId);
         }
         // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
         if tx.program_id != account.program_id && pre_tokens > account.tokens {
-            return Err(BankError::ExternalAccountTokenSpend);
+            return Err(TransactionProcessorError::ExternalAccountTokenSpend);
         }
         if account.tokens < 0 {
-            return Err(BankError::ResultWithNegativeTokens);
+            return Err(TransactionProcessorError::ResultWithNegativeTokens);
         }
         Ok(())
     }
@@ -379,8 +379,8 @@ impl Bank {
 
     /// Execute a transaction.
     /// This method calls the contract's process_transaction method and verifies that the result of
-    /// the contract does not violate the bank's accounting rules.
-    /// The accounts are committed back to the bank only if this function returns Ok(_).
+    /// the contract does not violate the transaction_processor's accounting rules.
+    /// The accounts are committed back to the transaction_processor only if this function returns Ok(_).
     fn execute_transaction(&self, tx: &Transaction, accounts: &mut [Account]) -> Result<()> {
         let pre_total: i64 = accounts.iter().map(|a| a.tokens).sum();
         let pre_data: Vec<_> = accounts
@@ -396,23 +396,23 @@ impl Bank {
             // TODO: the runtime should be checking read/write access to memory
             // we are trusting the hard coded contracts not to clobber or allocate
             if BudgetState::process_transaction(&tx, accounts).is_err() {
-                return Err(BankError::ProgramRuntimeError);
+                return Err(TransactionProcessorError::ProgramRuntimeError);
             }
         } else if StorageProgram::check_id(&tx.program_id) {
             if StorageProgram::process_transaction(&tx, accounts).is_err() {
-                return Err(BankError::ProgramRuntimeError);
+                return Err(TransactionProcessorError::ProgramRuntimeError);
             }
         } else if TicTacToeProgram::check_id(&tx.program_id) {
             if TicTacToeProgram::process_transaction(&tx, accounts).is_err() {
-                return Err(BankError::ProgramRuntimeError);
+                return Err(TransactionProcessorError::ProgramRuntimeError);
             }
         } else if TicTacToeDashboardProgram::check_id(&tx.program_id) {
             if TicTacToeDashboardProgram::process_transaction(&tx, accounts).is_err() {
-                return Err(BankError::ProgramRuntimeError);
+                return Err(TransactionProcessorError::ProgramRuntimeError);
             }
         } else if self.loaded_contract(&tx, accounts) {
         } else {
-            return Err(BankError::UnknownContractId);
+            return Err(TransactionProcessorError::UnknownContractId);
         }
         // Verify the transaction
         for ((pre_program_id, pre_tokens), post_account) in pre_data.iter().zip(accounts.iter()) {
@@ -421,7 +421,7 @@ impl Bank {
         // The total sum of all the tokens in all the pages cannot change.
         let post_total: i64 = accounts.iter().map(|a| a.tokens).sum();
         if pre_total != post_total {
-            Err(BankError::UnbalancedTransaction)
+            Err(TransactionProcessorError::UnbalancedTransaction)
         } else {
             Ok(())
         }
@@ -501,19 +501,19 @@ impl Bank {
         if err_count > 0 {
             info!("{} errors of {} txs", err_count, err_count + tx_count);
             if !self.is_leader {
-                inc_new_counter_info!("bank-process_transactions_err-validator", err_count);
+                inc_new_counter_info!("transaction_processor-process_transactions_err-validator", err_count);
                 inc_new_counter_info!(
-                    "bank-appy_debits-account_not_found-validator",
+                    "transaction_processor-appy_debits-account_not_found-validator",
                     error_counters.account_not_found_validator
                 );
             } else {
-                inc_new_counter_info!("bank-process_transactions_err-leader", err_count);
+                inc_new_counter_info!("transaction_processor-process_transactions_err-leader", err_count);
                 inc_new_counter_info!(
-                    "bank-appy_debits-account_not_found-leader",
+                    "transaction_processor-appy_debits-account_not_found-leader",
                     error_counters.account_not_found_leader
                 );
                 inc_new_counter_info!(
-                    "bank-appy_debits-vote_account_not_found",
+                    "transaction_processor-appy_debits-vote_account_not_found",
                     error_counters.account_not_found_vote
                 );
             }
@@ -589,7 +589,7 @@ impl Bank {
             let block: Vec<_> = block.collect();
             if !block.verify(&id) {
                 warn!("Ledger proof of history failed at entry: {}", entry_count);
-                return Err(BankError::LedgerVerificationFailed);
+                return Err(TransactionProcessorError::LedgerVerificationFailed);
             }
             id = block.last().unwrap().id;
             entry_count += self.process_entries_tail(block, tail, tail_idx)?;
@@ -698,11 +698,11 @@ impl Bank {
                 return res.clone();
             }
         }
-        Err(BankError::SignatureNotFound)
+        Err(TransactionProcessorError::SignatureNotFound)
     }
 
     pub fn has_signature(&self, signature: &Signature) -> bool {
-        self.get_signature_status(signature) != Err(BankError::SignatureNotFound)
+        self.get_signature_status(signature) != Err(TransactionProcessorError::SignatureNotFound)
     }
 
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
@@ -739,27 +739,27 @@ mod tests {
     use std::io::{BufReader, Cursor, Seek, SeekFrom};
 
     #[test]
-    fn test_bank_new() {
+    fn test_transaction_processor_new() {
         let mint = Mint::new(10_000);
-        let bank = Bank::new(&mint);
-        assert_eq!(bank.get_balance(&mint.pubkey()), 10_000);
+        let transaction_processor = TransactionProcessor::new(&mint);
+        assert_eq!(transaction_processor.get_balance(&mint.pubkey()), 10_000);
     }
 
     #[test]
     fn test_two_payments_to_one_party() {
         let mint = Mint::new(10_000);
         let pubkey = Keypair::new().pubkey();
-        let bank = Bank::new(&mint);
-        assert_eq!(bank.last_id(), mint.last_id());
+        let transaction_processor = TransactionProcessor::new(&mint);
+        assert_eq!(transaction_processor.last_id(), mint.last_id());
 
-        bank.transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
+        transaction_processor.transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
-        assert_eq!(bank.get_balance(&pubkey), 1_000);
+        assert_eq!(transaction_processor.get_balance(&pubkey), 1_000);
 
-        bank.transfer(500, &mint.keypair(), pubkey, mint.last_id())
+        transaction_processor.transfer(500, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
-        assert_eq!(bank.get_balance(&pubkey), 1_500);
-        assert_eq!(bank.transaction_count(), 2);
+        assert_eq!(transaction_processor.get_balance(&pubkey), 1_500);
+        assert_eq!(transaction_processor.transaction_count(), 2);
     }
 
     #[test]
@@ -767,11 +767,11 @@ mod tests {
         logger::setup();
         let mint = Mint::new(1);
         let pubkey = Keypair::new().pubkey();
-        let bank = Bank::new(&mint);
-        let res = bank.transfer(-1, &mint.keypair(), pubkey, mint.last_id());
-        println!("{:?}", bank.get_account(&pubkey));
-        assert_matches!(res, Err(BankError::ResultWithNegativeTokens));
-        assert_eq!(bank.transaction_count(), 0);
+        let transaction_processor = TransactionProcessor::new(&mint);
+        let res = transaction_processor.transfer(-1, &mint.keypair(), pubkey, mint.last_id());
+        println!("{:?}", transaction_processor.get_account(&pubkey));
+        assert_matches!(res, Err(TransactionProcessorError::ResultWithNegativeTokens));
+        assert_eq!(transaction_processor.transaction_count(), 0);
     }
 
     // TODO: This test demonstrates that fees are not paid when a program fails.
@@ -779,7 +779,7 @@ mod tests {
     #[test]
     fn test_detect_failed_duplicate_transactions_issue_1157() {
         let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let transaction_processor = TransactionProcessor::new(&mint);
         let dest = Keypair::new();
 
         // source with 0 contract context
@@ -793,91 +793,91 @@ mod tests {
             1,
         );
         let signature = tx.signature;
-        assert!(!bank.has_signature(&signature));
-        let res = bank.process_transaction(&tx);
+        assert!(!transaction_processor.has_signature(&signature));
+        let res = transaction_processor.process_transaction(&tx);
 
         // Result failed, but signature is registered
         assert!(!res.is_ok());
-        assert!(bank.has_signature(&signature));
+        assert!(transaction_processor.has_signature(&signature));
         assert_matches!(
-            bank.get_signature_status(&signature),
-            Err(BankError::ResultWithNegativeTokens)
+            transaction_processor.get_signature_status(&signature),
+            Err(TransactionProcessorError::ResultWithNegativeTokens)
         );
 
         // The tokens didn't move, but the from address paid the transaction fee.
-        assert_eq!(bank.get_balance(&dest.pubkey()), 0);
+        assert_eq!(transaction_processor.get_balance(&dest.pubkey()), 0);
 
         // BUG: This should be the original balance minus the transaction fee.
-        //assert_eq!(bank.get_balance(&mint.pubkey()), 0);
+        //assert_eq!(transaction_processor.get_balance(&mint.pubkey()), 0);
     }
 
     #[test]
     fn test_account_not_found() {
         let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let transaction_processor = TransactionProcessor::new(&mint);
         let keypair = Keypair::new();
         assert_eq!(
-            bank.transfer(1, &keypair, mint.pubkey(), mint.last_id()),
-            Err(BankError::AccountNotFound)
+            transaction_processor.transfer(1, &keypair, mint.pubkey(), mint.last_id()),
+            Err(TransactionProcessorError::AccountNotFound)
         );
-        assert_eq!(bank.transaction_count(), 0);
+        assert_eq!(transaction_processor.transaction_count(), 0);
     }
 
     #[test]
     fn test_insufficient_funds() {
         let mint = Mint::new(11_000);
-        let bank = Bank::new(&mint);
+        let transaction_processor = TransactionProcessor::new(&mint);
         let pubkey = Keypair::new().pubkey();
-        bank.transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
+        transaction_processor.transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
-        assert_eq!(bank.transaction_count(), 1);
-        assert_eq!(bank.get_balance(&pubkey), 1_000);
+        assert_eq!(transaction_processor.transaction_count(), 1);
+        assert_eq!(transaction_processor.get_balance(&pubkey), 1_000);
         assert_matches!(
-            bank.transfer(10_001, &mint.keypair(), pubkey, mint.last_id()),
-            Err(BankError::ResultWithNegativeTokens)
+            transaction_processor.transfer(10_001, &mint.keypair(), pubkey, mint.last_id()),
+            Err(TransactionProcessorError::ResultWithNegativeTokens)
         );
-        assert_eq!(bank.transaction_count(), 1);
+        assert_eq!(transaction_processor.transaction_count(), 1);
 
         let mint_pubkey = mint.keypair().pubkey();
-        assert_eq!(bank.get_balance(&mint_pubkey), 10_000);
-        assert_eq!(bank.get_balance(&pubkey), 1_000);
+        assert_eq!(transaction_processor.get_balance(&mint_pubkey), 10_000);
+        assert_eq!(transaction_processor.get_balance(&pubkey), 1_000);
     }
 
     #[test]
     fn test_transfer_to_newb() {
         let mint = Mint::new(10_000);
-        let bank = Bank::new(&mint);
+        let transaction_processor = TransactionProcessor::new(&mint);
         let pubkey = Keypair::new().pubkey();
-        bank.transfer(500, &mint.keypair(), pubkey, mint.last_id())
+        transaction_processor.transfer(500, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
-        assert_eq!(bank.get_balance(&pubkey), 500);
+        assert_eq!(transaction_processor.get_balance(&pubkey), 500);
     }
 
     #[test]
     fn test_duplicate_transaction_signature() {
         let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let transaction_processor = TransactionProcessor::new(&mint);
         let signature = Signature::default();
         assert!(
-            bank.reserve_signature_with_last_id(&signature, &mint.last_id())
+            transaction_processor.reserve_signature_with_last_id(&signature, &mint.last_id())
                 .is_ok()
         );
         assert_eq!(
-            bank.reserve_signature_with_last_id(&signature, &mint.last_id()),
-            Err(BankError::DuplicateSignature)
+            transaction_processor.reserve_signature_with_last_id(&signature, &mint.last_id()),
+            Err(TransactionProcessorError::DuplicateSignature)
         );
     }
 
     #[test]
     fn test_clear_signatures() {
         let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let transaction_processor = TransactionProcessor::new(&mint);
         let signature = Signature::default();
-        bank.reserve_signature_with_last_id(&signature, &mint.last_id())
+        transaction_processor.reserve_signature_with_last_id(&signature, &mint.last_id())
             .unwrap();
-        bank.clear_signatures();
+        transaction_processor.clear_signatures();
         assert!(
-            bank.reserve_signature_with_last_id(&signature, &mint.last_id())
+            transaction_processor.reserve_signature_with_last_id(&signature, &mint.last_id())
                 .is_ok()
         );
     }
@@ -885,52 +885,52 @@ mod tests {
     #[test]
     fn test_get_signature_status() {
         let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let transaction_processor = TransactionProcessor::new(&mint);
         let signature = Signature::default();
-        bank.reserve_signature_with_last_id(&signature, &mint.last_id())
+        transaction_processor.reserve_signature_with_last_id(&signature, &mint.last_id())
             .expect("reserve signature");
-        assert!(bank.get_signature_status(&signature).is_ok());
+        assert!(transaction_processor.get_signature_status(&signature).is_ok());
     }
 
     #[test]
     fn test_has_signature() {
         let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let transaction_processor = TransactionProcessor::new(&mint);
         let signature = Signature::default();
-        bank.reserve_signature_with_last_id(&signature, &mint.last_id())
+        transaction_processor.reserve_signature_with_last_id(&signature, &mint.last_id())
             .expect("reserve signature");
-        assert!(bank.has_signature(&signature));
+        assert!(transaction_processor.has_signature(&signature));
     }
 
     #[test]
     fn test_reject_old_last_id() {
         let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let transaction_processor = TransactionProcessor::new(&mint);
         let signature = Signature::default();
         for i in 0..MAX_ENTRY_IDS {
             let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-            bank.register_entry_id(&last_id);
+            transaction_processor.register_entry_id(&last_id);
         }
         // Assert we're no longer able to use the oldest entry ID.
         assert_eq!(
-            bank.reserve_signature_with_last_id(&signature, &mint.last_id()),
-            Err(BankError::LastIdNotFound)
+            transaction_processor.reserve_signature_with_last_id(&signature, &mint.last_id()),
+            Err(TransactionProcessorError::LastIdNotFound)
         );
     }
 
     #[test]
     fn test_count_valid_ids() {
         let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let transaction_processor = TransactionProcessor::new(&mint);
         let ids: Vec<_> = (0..MAX_ENTRY_IDS)
             .map(|i| {
                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-                bank.register_entry_id(&last_id);
+                transaction_processor.register_entry_id(&last_id);
                 last_id
             }).collect();
-        assert_eq!(bank.count_valid_ids(&[]).len(), 0);
-        assert_eq!(bank.count_valid_ids(&[mint.last_id()]).len(), 0);
-        for (i, id) in bank.count_valid_ids(&ids).iter().enumerate() {
+        assert_eq!(transaction_processor.count_valid_ids(&[]).len(), 0);
+        assert_eq!(transaction_processor.count_valid_ids(&[mint.last_id()]).len(), 0);
+        for (i, id) in transaction_processor.count_valid_ids(&ids).iter().enumerate() {
             assert_eq!(id.0, i);
         }
     }
@@ -938,44 +938,44 @@ mod tests {
     #[test]
     fn test_debits_before_credits() {
         let mint = Mint::new(2);
-        let bank = Bank::new(&mint);
+        let transaction_processor = TransactionProcessor::new(&mint);
         let keypair = Keypair::new();
         let tx0 = Transaction::system_new(&mint.keypair(), keypair.pubkey(), 2, mint.last_id());
         let tx1 = Transaction::system_new(&keypair, mint.pubkey(), 1, mint.last_id());
         let txs = vec![tx0, tx1];
-        let results = bank.process_transactions(&txs);
+        let results = transaction_processor.process_transactions(&txs);
         assert!(results[1].is_err());
 
         // Assert bad transactions aren't counted.
-        assert_eq!(bank.transaction_count(), 1);
+        assert_eq!(transaction_processor.transaction_count(), 1);
     }
 
     #[test]
     fn test_process_empty_entry_is_registered() {
         let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let transaction_processor = TransactionProcessor::new(&mint);
         let keypair = Keypair::new();
         let entry = next_entry(&mint.last_id(), 1, vec![]);
         let tx = Transaction::system_new(&mint.keypair(), keypair.pubkey(), 1, entry.id);
 
         // First, ensure the TX is rejected because of the unregistered last ID
         assert_eq!(
-            bank.process_transaction(&tx),
-            Err(BankError::LastIdNotFound)
+            transaction_processor.process_transaction(&tx),
+            Err(TransactionProcessorError::LastIdNotFound)
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
-        bank.process_entries(&[entry]).unwrap();
-        assert!(bank.process_transaction(&tx).is_ok());
+        transaction_processor.process_entries(&[entry]).unwrap();
+        assert!(transaction_processor.process_transaction(&tx).is_ok());
     }
 
     #[test]
     fn test_process_genesis() {
         let mint = Mint::new(1);
         let genesis = mint.create_entries();
-        let bank = Bank::default();
-        bank.process_ledger(genesis).unwrap();
-        assert_eq!(bank.get_balance(&mint.pubkey()), 1);
+        let transaction_processor = TransactionProcessor::default();
+        transaction_processor.process_ledger(genesis).unwrap();
+        assert_eq!(transaction_processor.get_balance(&mint.pubkey()), 1);
     }
 
     fn create_sample_block_with_next_entries_using_keypairs(
@@ -1024,14 +1024,14 @@ mod tests {
     fn test_process_ledger() {
         let (ledger, pubkey) = create_sample_ledger(1);
         let (ledger, dup) = ledger.tee();
-        let bank = Bank::default();
-        let (ledger_height, tail) = bank.process_ledger(ledger).unwrap();
-        assert_eq!(bank.get_balance(&pubkey), 1);
+        let transaction_processor = TransactionProcessor::default();
+        let (ledger_height, tail) = transaction_processor.process_ledger(ledger).unwrap();
+        assert_eq!(transaction_processor.get_balance(&pubkey), 1);
         assert_eq!(ledger_height, 3);
         assert_eq!(tail.len(), 3);
         assert_eq!(tail, dup.collect_vec());
         let last_entry = &tail[tail.len() - 1];
-        assert_eq!(bank.last_id(), last_entry.id);
+        assert_eq!(transaction_processor.last_id(), last_entry.id);
     }
 
     #[test]
@@ -1039,20 +1039,20 @@ mod tests {
         // TODO: put me back in when Criterion is up
         //        for _ in 0..10 {
         //            let (ledger, _) = create_sample_ledger(WINDOW_SIZE as usize);
-        //            let bank = Bank::default();
-        //            let (_, _) = bank.process_ledger(ledger).unwrap();
+        //            let transaction_processor = TransactionProcessor::default();
+        //            let (_, _) = transaction_processor.process_ledger(ledger).unwrap();
         //        }
 
         let window_size = WINDOW_SIZE as usize;
         for entry_count in window_size - 3..window_size + 2 {
             let (ledger, pubkey) = create_sample_ledger(entry_count);
-            let bank = Bank::default();
-            let (ledger_height, tail) = bank.process_ledger(ledger).unwrap();
-            assert_eq!(bank.get_balance(&pubkey), 1);
+            let transaction_processor = TransactionProcessor::default();
+            let (ledger_height, tail) = transaction_processor.process_ledger(ledger).unwrap();
+            assert_eq!(transaction_processor.get_balance(&pubkey), 1);
             assert_eq!(ledger_height, entry_count as u64 + 2);
             assert!(tail.len() <= window_size);
             let last_entry = &tail[tail.len() - 1];
-            assert_eq!(bank.last_id(), last_entry.id);
+            assert_eq!(transaction_processor.last_id(), last_entry.id);
         }
     }
 
@@ -1071,9 +1071,9 @@ mod tests {
         let (ledger, pubkey) = create_sample_ledger(1);
         let ledger = to_file_iter(ledger);
 
-        let bank = Bank::default();
-        bank.process_ledger(ledger).unwrap();
-        assert_eq!(bank.get_balance(&pubkey), 1);
+        let transaction_processor = TransactionProcessor::default();
+        transaction_processor.process_ledger(ledger).unwrap();
+        assert_eq!(transaction_processor.get_balance(&pubkey), 1);
     }
 
     #[test]
@@ -1082,19 +1082,19 @@ mod tests {
         let genesis = to_file_iter(mint.create_entries().into_iter());
         let block = to_file_iter(create_sample_block(&mint, 1));
 
-        let bank = Bank::default();
-        bank.process_ledger(genesis.chain(block)).unwrap();
-        assert_eq!(bank.get_balance(&mint.pubkey()), 1);
+        let transaction_processor = TransactionProcessor::default();
+        transaction_processor.process_ledger(genesis.chain(block)).unwrap();
+        assert_eq!(transaction_processor.get_balance(&mint.pubkey()), 1);
     }
 
     #[test]
     fn test_new_default() {
-        let def_bank = Bank::default();
-        assert!(def_bank.is_leader);
-        let leader_bank = Bank::new_default(true);
-        assert!(leader_bank.is_leader);
-        let validator_bank = Bank::new_default(false);
-        assert!(!validator_bank.is_leader);
+        let def_transaction_processor = TransactionProcessor::default();
+        assert!(def_transaction_processor.is_leader);
+        let leader_transaction_processor = TransactionProcessor::new_default(true);
+        assert!(leader_transaction_processor.is_leader);
+        let validator_transaction_processor = TransactionProcessor::new_default(false);
+        assert!(!validator_transaction_processor.is_leader);
     }
     #[test]
     fn test_hash_internal_state() {
@@ -1105,37 +1105,37 @@ mod tests {
         let ledger0 = create_sample_ledger_with_mint_and_keypairs(&mint, &keypairs);
         let ledger1 = create_sample_ledger_with_mint_and_keypairs(&mint, &keypairs);
 
-        let bank0 = Bank::default();
-        bank0.process_ledger(ledger0).unwrap();
-        let bank1 = Bank::default();
-        bank1.process_ledger(ledger1).unwrap();
+        let transaction_processor0 = TransactionProcessor::default();
+        transaction_processor0.process_ledger(ledger0).unwrap();
+        let transaction_processor1 = TransactionProcessor::default();
+        transaction_processor1.process_ledger(ledger1).unwrap();
 
-        let initial_state = bank0.hash_internal_state();
+        let initial_state = transaction_processor0.hash_internal_state();
 
-        assert_eq!(bank1.hash_internal_state(), initial_state);
+        assert_eq!(transaction_processor1.hash_internal_state(), initial_state);
 
         let pubkey = keypairs[0].pubkey();
-        bank0
+        transaction_processor0
             .transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
-        assert_ne!(bank0.hash_internal_state(), initial_state);
-        bank1
+        assert_ne!(transaction_processor0.hash_internal_state(), initial_state);
+        transaction_processor1
             .transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
-        assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
+        assert_eq!(transaction_processor0.hash_internal_state(), transaction_processor1.hash_internal_state());
     }
     #[test]
     fn test_finality() {
-        let def_bank = Bank::default();
-        assert_eq!(def_bank.finality(), std::usize::MAX);
-        def_bank.set_finality(90);
-        assert_eq!(def_bank.finality(), 90);
+        let def_transaction_processor = TransactionProcessor::default();
+        assert_eq!(def_transaction_processor.finality(), std::usize::MAX);
+        def_transaction_processor.set_finality(90);
+        assert_eq!(def_transaction_processor.finality(), 90);
     }
 
     #[test]
     fn test_storage_tx() {
         let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let transaction_processor = TransactionProcessor::new(&mint);
         let tx = Transaction::new(
             &mint.keypair(),
             &[],
@@ -1144,6 +1144,6 @@ mod tests {
             mint.last_id(),
             0,
         );
-        assert!(bank.process_transaction(&tx).is_err());
+        assert!(transaction_processor.process_transaction(&tx).is_err());
     }
 }

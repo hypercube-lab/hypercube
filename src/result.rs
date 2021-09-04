@@ -1,8 +1,8 @@
 //! The `result` module exposes a Result type that propagates one of many different Error types.
 
-use bank;
+use transaction_processor;
 use bincode;
-use crdt;
+use blockthread;
 #[cfg(feature = "erasure")]
 use erasure;
 use packet;
@@ -19,8 +19,8 @@ pub enum Error {
     RecvError(std::sync::mpsc::RecvError),
     RecvTimeoutError(std::sync::mpsc::RecvTimeoutError),
     Serialize(std::boxed::Box<bincode::ErrorKind>),
-    BankError(bank::BankError),
-    CrdtError(crdt::CrdtError),
+    TransactionProcessorError(transaction_processor::TransactionProcessorError),
+    BlockThreadError(blockthread::BlockThreadError),
     BlobError(packet::BlobError),
     #[cfg(feature = "erasure")]
     ErasureError(erasure::ErasureError),
@@ -47,14 +47,14 @@ impl std::convert::From<std::sync::mpsc::RecvTimeoutError> for Error {
         Error::RecvTimeoutError(e)
     }
 }
-impl std::convert::From<bank::BankError> for Error {
-    fn from(e: bank::BankError) -> Error {
-        Error::BankError(e)
+impl std::convert::From<transaction_processor::TransactionProcessorError> for Error {
+    fn from(e: transaction_processor::TransactionProcessorError) -> Error {
+        Error::TransactionProcessorError(e)
     }
 }
-impl std::convert::From<crdt::CrdtError> for Error {
-    fn from(e: crdt::CrdtError) -> Error {
-        Error::CrdtError(e)
+impl std::convert::From<blockthread::BlockThreadError> for Error {
+    fn from(e: blockthread::BlockThreadError) -> Error {
+        Error::BlockThreadError(e)
     }
 }
 #[cfg(feature = "erasure")]

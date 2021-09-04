@@ -18,11 +18,11 @@ fn main() {
         Ok(file) => file,
     };
 
-    let git_output = Command::new("git")
+    let git_outx_creatort = Command::new("git")
         .args(&["rev-parse", "HEAD"])
-        .output()
+        .outx_creatort()
         .expect("failed to execute git rev-parse");
-    let git_commit_hash = String::from_utf8_lossy(&git_output.stdout);
+    let git_commit_hash = String::from_utf8_lossy(&git_outx_creatort.stdout);
     let trimmed_hash = git_commit_hash.trim().to_string();
     println!("uploading hash: {}", trimmed_hash);
 

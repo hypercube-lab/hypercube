@@ -4,7 +4,7 @@ extern crate serde_json;
 extern crate hypercube;
 
 use clap::{App, Arg, SubCommand};
-use hypercube::bank::Bank;
+use hypercube::transaction_processor::TransactionProcessor;
 use hypercube::ledger::{read_ledger, verify_ledger};
 use hypercube::logger;
 use std::io::{stdout, Write};
@@ -104,7 +104,7 @@ fn main() {
                 eprintln!("verify requires at least 2 entries to run");
                 exit(1);
             }
-            let bank = Bank::default();
+            let transaction_processor = TransactionProcessor::default();
 
             {
                 let genesis = match read_ledger(ledger_path, true) {
@@ -117,7 +117,7 @@ fn main() {
 
                 let genesis = genesis.take(2).map(|e| e.unwrap());
 
-                if let Err(e) = bank.process_ledger(genesis) {
+                if let Err(e) = transaction_processor.process_ledger(genesis) {
                     eprintln!("verify failed at genesis err: {:?}", e);
                     if !matches.is_present("continue") {
                         exit(1);
@@ -131,13 +131,13 @@ fn main() {
                 if i >= head {
                     break;
                 }
-                if !entry.verify(&bank.last_id()) {
+                if !entry.verify(&transaction_processor.last_id()) {
                     eprintln!("entry.verify() failed at entry[{}]", i + 2);
                     if !matches.is_present("continue") {
                         exit(1);
                     }
                 }
-                if let Err(e) = bank.process_entry(&entry) {
+                if let Err(e) = transaction_processor.process_entry(&entry) {
                     eprintln!("verify failed at entry[{}], err: {:?}", i + 2, e);
                     if !matches.is_present("continue") {
                         exit(1);

@@ -6,7 +6,7 @@ use bincode::{serialize_into, serialized_size};
 use fin_plan_transaction::BudgetTransaction;
 use hash::Hash;
 use packet::{SharedBlob, BLOB_DATA_SIZE};
-use poh::Poh;
+use pod::Pod;
 use rayon::prelude::*;
 use xpz_program_interface::pubkey::Pubkey;
 use std::io::Cursor;
@@ -79,7 +79,7 @@ impl Entry {
             let mut blob_w = blob.write().unwrap();
             let pos = {
                 let mut out = Cursor::new(blob_w.data_mut());
-                serialize_into(&mut out, &self).expect("failed to serialize output");
+                serialize_into(&mut out, &self).expect("failed to serialize outx_creatort");
                 out.position() as usize
             };
             blob_w.set_size(pos);
@@ -200,16 +200,16 @@ fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -
         return *start_hash;
     }
 
-    let mut poh = Poh::new(*start_hash);
+    let mut pod = Pod::new(*start_hash);
 
     for _ in 1..num_hashes {
-        poh.hash();
+        pod.hash();
     }
 
     if transactions.is_empty() {
-        poh.tick().id
+        pod.tick().id
     } else {
-        poh.record(Transaction::hash(transactions)).id
+        pod.record(Transaction::hash(transactions)).id
     }
 }
 

@@ -1,4 +1,4 @@
-use crdt::{NodeInfo, FULLNODE_PORT_RANGE};
+use blockthread::{NodeInfo, FULLNODE_PORT_RANGE};
 use netutil::bind_in_range;
 use std::time::Duration;
 use thin_client::ThinClient;
@@ -14,7 +14,7 @@ pub fn mk_client(r: &NodeInfo) -> ThinClient {
     ThinClient::new(
         r.contact_info.rpu,
         requests_socket,
-        r.contact_info.tpu,
+        r.contact_info.tx_creator,
         transactions_socket,
     )
 }

@@ -1,8 +1,8 @@
 //! The `replicate_stage` replicates transactions broadcast by the leader.
 
-use bank::Bank;
+use transaction_processor::TransactionProcessor;
 use counter::Counter;
-use crdt::Crdt;
+use blockthread::BlockThread;
 use entry::EntryReceiver;
 use ledger::{Block, LedgerWriter};
 use log::Level;
@@ -45,8 +45,8 @@ pub struct ReplicateStage {
 impl ReplicateStage {
     /// Process entry blobs, already in order
     fn replicate_requests(
-        bank: &Arc<Bank>,
-        crdt: &Arc<RwLock<Crdt>>,
+        transaction_processor: &Arc<TransactionProcessor>,
+        blockthread: &Arc<RwLock<BlockThread>>,
         window_receiver: &EntryReceiver,
         ledger_writer: Option<&mut LedgerWriter>,
         keypair: &Arc<Keypair>,
@@ -59,15 +59,15 @@ impl ReplicateStage {
             entries.append(&mut more);
         }
 
-        let res = bank.process_entries(&entries);
+        let res = transaction_processor.process_entries(&entries);
 
         if let Some(sender) = vote_blob_sender {
-            send_validator_vote(bank, keypair, crdt, sender)?;
+            send_validator_vote(transaction_processor, keypair, blockthread, sender)?;
         }
 
         {
-            let mut wcrdt = crdt.write().unwrap();
-            wcrdt.insert_votes(&entries.votes());
+            let mut wblockthread = blockthread.write().unwrap();
+            wblockthread.insert_votes(&entries.votes());
         }
 
         inc_new_counter_info!(
@@ -86,8 +86,8 @@ impl ReplicateStage {
 
     pub fn new(
         keypair: Arc<Keypair>,
-        bank: Arc<Bank>,
-        crdt: Arc<RwLock<Crdt>>,
+        transaction_processor: Arc<TransactionProcessor>,
+        blockthread: Arc<RwLock<BlockThread>>,
         window_receiver: EntryReceiver,
         ledger_path: Option<&str>,
         exit: Arc<AtomicBool>,
@@ -115,8 +115,8 @@ impl ReplicateStage {
                     };
 
                     if let Err(e) = Self::replicate_requests(
-                        &bank,
-                        &crdt,
+                        &transaction_processor,
+                        &blockthread,
                         &window_receiver,
                         ledger_writer.as_mut(),
                         &keypair,
