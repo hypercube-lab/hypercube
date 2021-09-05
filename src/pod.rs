@@ -1,22 +1,22 @@
-//! The `Poh` module provides an object for generating a Proof of History.
+//! The `Pod` module provides an object for generating a Proof of History.
 //! It records Hashes items on behalf of its users.
 use hash::{hash, hashv, Hash};
 
-pub struct Poh {
+pub struct Pod {
     last_hash: Hash,
     num_hashes: u64,
 }
 
 #[derive(Debug)]
-pub struct PohEntry {
+pub struct PodEntry {
     pub num_hashes: u64,
     pub id: Hash,
     pub mixin: Option<Hash>,
 }
 
-impl Poh {
+impl Pod {
     pub fn new(last_hash: Hash) -> Self {
-        Poh {
+        Pod {
             last_hash,
             num_hashes: 0,
         }
@@ -27,28 +27,28 @@ impl Poh {
         self.num_hashes += 1;
     }
 
-    pub fn record(&mut self, mixin: Hash) -> PohEntry {
+    pub fn record(&mut self, mixin: Hash) -> PodEntry {
         let num_hashes = self.num_hashes + 1;
         self.last_hash = hashv(&[&self.last_hash.as_ref(), &mixin.as_ref()]);
 
         self.num_hashes = 0;
 
-        PohEntry {
+        PodEntry {
             num_hashes,
             id: self.last_hash,
             mixin: Some(mixin),
         }
     }
 
-    // emissions of Ticks (i.e. PohEntries without a mixin) allows
+    // emissions of Ticks (i.e. PodEntries without a mixin) allows
     //  validators to parallelize the work of catching up
-    pub fn tick(&mut self) -> PohEntry {
+    pub fn tick(&mut self) -> PodEntry {
         self.hash();
 
         let num_hashes = self.num_hashes;
         self.num_hashes = 0;
 
-        PohEntry {
+        PodEntry {
             num_hashes,
             id: self.last_hash,
             mixin: None,
@@ -57,7 +57,7 @@ impl Poh {
 }
 
 #[cfg(test)]
-pub fn verify(initial: Hash, entries: &[PohEntry]) -> bool {
+pub fn verify(initial: Hash, entries: &[PodEntry]) -> bool {
     let mut last_hash = initial;
 
     for entry in entries {
@@ -81,14 +81,14 @@ pub fn verify(initial: Hash, entries: &[PohEntry]) -> bool {
 #[cfg(test)]
 mod tests {
     use hash::Hash;
-    use poh::{self, PohEntry};
+    use pod::{self, PodEntry};
 
     #[test]
     #[should_panic]
-    fn test_poh_verify_assert() {
-        poh::verify(
+    fn test_pod_verify_assert() {
+        pod::verify(
             Hash::default(),
-            &[PohEntry {
+            &[PodEntry {
                 num_hashes: 0,
                 id: Hash::default(),
                 mixin: None,

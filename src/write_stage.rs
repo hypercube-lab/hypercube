@@ -1,10 +1,10 @@
 //! The `write_stage` module implements the TPU's write stage. It
 //! writes entries to the given writer, which is typically a file or
-//! stdout, and then sends the Entry to its output channel.
+//! stdout, and then sends the Entry to its outx_creatort channel.
 
-use bank::Bank;
+use transaction_processor::TransactionProcessor;
 use counter::Counter;
-use crdt::Crdt;
+use blockthread::BlockThread;
 use entry::Entry;
 use ledger::{Block, LedgerWriter};
 use log::Level;
@@ -38,7 +38,7 @@ impl WriteStage {
     // fit before we hit the entry height for leader rotation. Also return a boolean
     // reflecting whether we actually hit an entry height for leader rotation.
     fn find_leader_rotation_index(
-        crdt: &Arc<RwLock<Crdt>>,
+        blockthread: &Arc<RwLock<BlockThread>>,
         leader_rotation_interval: u64,
         entry_height: u64,
         mut new_entries: Vec<Entry>,
@@ -51,9 +51,9 @@ impl WriteStage {
 
         loop {
             if (entry_height + i as u64) % leader_rotation_interval == 0 {
-                let rcrdt = crdt.read().unwrap();
-                let my_id = rcrdt.my_data().id;
-                let next_leader = rcrdt.get_scheduled_leader(entry_height + i as u64);
+                let rblockthread = blockthread.read().unwrap();
+                let my_id = rblockthread.my_data().id;
+                let next_leader = rblockthread.get_scheduled_leader(entry_height + i as u64);
                 if next_leader != Some(my_id) {
                     is_leader_rotation = true;
                     break;
@@ -86,7 +86,7 @@ impl WriteStage {
     /// Process any Entry items that have been published by the RecordStage.
     /// continuosly send entries out
     pub fn write_and_send_entries(
-        crdt: &Arc<RwLock<Crdt>>,
+        blockthread: &Arc<RwLock<BlockThread>>,
         ledger_writer: &mut LedgerWriter,
         entry_sender: &Sender<Vec<Entry>>,
         entry_receiver: &Receiver<Vec<Entry>>,
@@ -103,7 +103,7 @@ impl WriteStage {
             // Find out how many more entries we can squeeze in until the next leader
             // rotation
             let (new_entries, is_leader_rotation) = Self::find_leader_rotation_index(
-                crdt,
+                blockthread,
                 leader_rotation_interval,
                 *entry_height + num_new_entries as u64,
                 received_entries,
@@ -127,17 +127,17 @@ impl WriteStage {
         info!("write_stage entries: {}", num_new_entries);
 
         let mut entries_send_total = 0;
-        let mut crdt_votes_total = 0;
+        let mut blockthread_votes_total = 0;
 
         let start = Instant::now();
         for entries in ventries {
             for e in &entries {
                 num_txs += e.transactions.len();
             }
-            let crdt_votes_start = Instant::now();
+            let blockthread_votes_start = Instant::now();
             let votes = &entries.votes();
-            crdt.write().unwrap().insert_votes(&votes);
-            crdt_votes_total += duration_as_ms(&crdt_votes_start.elapsed());
+            blockthread.write().unwrap().insert_votes(&votes);
+            blockthread_votes_total += duration_as_ms(&blockthread_votes_start.elapsed());
 
             ledger_writer.write_entries(entries.clone())?;
             // Once the entries have been written to the ledger, then we can
@@ -165,11 +165,11 @@ impl WriteStage {
             "write_stage-time_ms",
             duration_as_ms(&now.elapsed()) as usize
         );
-        info!("done write_stage txs: {} time {} ms txs/s: {} entries_send_total: {} crdt_votes_total: {}",
+        info!("done write_stage txs: {} time {} ms txs/s: {} entries_send_total: {} blockthread_votes_total: {}",
               num_txs, duration_as_ms(&start.elapsed()),
               num_txs as f32 / duration_as_s(&start.elapsed()),
               entries_send_total,
-              crdt_votes_total);
+              blockthread_votes_total);
 
         Ok(())
     }
@@ -177,8 +177,8 @@ impl WriteStage {
     /// Create a new WriteStage for writing and broadcasting entries.
     pub fn new(
         keypair: Arc<Keypair>,
-        bank: Arc<Bank>,
-        crdt: Arc<RwLock<Crdt>>,
+        transaction_processor: Arc<TransactionProcessor>,
+        blockthread: Arc<RwLock<BlockThread>>,
         ledger_path: &str,
         entry_receiver: Receiver<Vec<Entry>>,
         entry_height: u64,
@@ -201,9 +201,9 @@ impl WriteStage {
                 let id;
                 let leader_rotation_interval;
                 {
-                    let rcrdt = crdt.read().unwrap();
-                    id = rcrdt.id;
-                    leader_rotation_interval = rcrdt.get_leader_rotation_interval();
+                    let rblockthread = blockthread.read().unwrap();
+                    id = rblockthread.id;
+                    leader_rotation_interval = rblockthread.get_leader_rotation_interval();
                 }
                 let mut entry_height = entry_height;
                 loop {
@@ -212,10 +212,10 @@ impl WriteStage {
                     // n * leader_rotation_interval for some "n". Once we've forwarded
                     // that last block, check for the next scheduled leader.
                     if entry_height % (leader_rotation_interval as u64) == 0 {
-                        let rcrdt = crdt.read().unwrap();
-                        let my_id = rcrdt.my_data().id;
-                        let scheduled_leader = rcrdt.get_scheduled_leader(entry_height);
-                        drop(rcrdt);
+                        let rblockthread = blockthread.read().unwrap();
+                        let my_id = rblockthread.my_data().id;
+                        let scheduled_leader = rblockthread.get_scheduled_leader(entry_height);
+                        drop(rblockthread);
                         match scheduled_leader {
                             Some(id) if id == my_id => (),
                             // If the leader stays in power for the next
@@ -230,7 +230,7 @@ impl WriteStage {
                     }
 
                     if let Err(e) = Self::write_and_send_entries(
-                        &crdt,
+                        &blockthread,
                         &mut ledger_writer,
                         &entry_sender,
                         &entry_receiver,
@@ -254,8 +254,8 @@ impl WriteStage {
                     if let Err(e) = send_leader_vote(
                         &id,
                         &keypair,
-                        &bank,
-                        &crdt,
+                        &transaction_processor,
+                        &blockthread,
                         &vote_blob_sender,
                         &mut last_vote,
                         &mut last_valid_validator_timestamp,
@@ -291,8 +291,8 @@ impl Service for WriteStage {
 
 #[cfg(test)]
 mod tests {
-    use bank::Bank;
-    use crdt::{Crdt, Node};
+    use transaction_processor::TransactionProcessor;
+    use blockthread::{BlockThread, Node};
     use entry::Entry;
     use hash::Hash;
     use ledger::{genesis, next_entries_mut, read_ledger};
@@ -309,20 +309,20 @@ mod tests {
         write_stage: WriteStage,
         entry_sender: Sender<Vec<Entry>>,
         _write_stage_entry_receiver: Receiver<Vec<Entry>>,
-        crdt: Arc<RwLock<Crdt>>,
-        bank: Arc<Bank>,
+        blockthread: Arc<RwLock<BlockThread>>,
+        transaction_processor: Arc<TransactionProcessor>,
         leader_ledger_path: String,
         ledger_tail: Vec<Entry>,
     }
 
-    fn process_ledger(ledger_path: &str, bank: &Bank) -> (u64, Vec<Entry>) {
+    fn process_ledger(ledger_path: &str, transaction_processor: &TransactionProcessor) -> (u64, Vec<Entry>) {
         let entries = read_ledger(ledger_path, true).expect("opening ledger");
 
         let entries = entries
             .map(|e| e.unwrap_or_else(|err| panic!("failed to parse entry. error: {}", err)));
 
         info!("processing ledger...");
-        bank.process_ledger(entries).expect("process_ledger")
+        transaction_processor.process_ledger(entries).expect("process_ledger")
     }
 
     fn setup_dummy_write_stage(leader_rotation_interval: u64) -> DummyWriteStage {
@@ -331,16 +331,16 @@ mod tests {
         let my_id = leader_keypair.pubkey();
         let leader_info = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
-        let mut crdt = Crdt::new(leader_info.info).expect("Crdt::new");
-        crdt.set_leader_rotation_interval(leader_rotation_interval);
-        let crdt = Arc::new(RwLock::new(crdt));
-        let bank = Bank::new_default(true);
-        let bank = Arc::new(bank);
+        let mut blockthread = BlockThread::new(leader_info.info).expect("BlockThread::new");
+        blockthread.set_leader_rotation_interval(leader_rotation_interval);
+        let blockthread = Arc::new(RwLock::new(blockthread));
+        let transaction_processor = TransactionProcessor::new_default(true);
+        let transaction_processor = Arc::new(transaction_processor);
 
         // Make a ledger
         let (_, leader_ledger_path) = genesis("test_leader_rotation_exit", 10_000);
 
-        let (entry_height, ledger_tail) = process_ledger(&leader_ledger_path, &bank);
+        let (entry_height, ledger_tail) = process_ledger(&leader_ledger_path, &transaction_processor);
 
         // Make a dummy pipe
         let (entry_sender, entry_receiver) = channel();
@@ -348,8 +348,8 @@ mod tests {
         // Start up the write stage
         let (write_stage, _write_stage_entry_receiver) = WriteStage::new(
             leader_keypair,
-            bank.clone(),
-            crdt.clone(),
+            transaction_processor.clone(),
+            blockthread.clone(),
             &leader_ledger_path,
             entry_receiver,
             entry_height,
@@ -362,8 +362,8 @@ mod tests {
             // Need to keep this alive, otherwise the write_stage will detect ChannelClosed
             // and shut down
             _write_stage_entry_receiver,
-            crdt,
-            bank,
+            blockthread,
+            transaction_processor,
             leader_ledger_path,
             ledger_tail,
         }
@@ -375,8 +375,8 @@ mod tests {
         let write_stage_info = setup_dummy_write_stage(leader_rotation_interval);
 
         {
-            let mut wcrdt = write_stage_info.crdt.write().unwrap();
-            wcrdt.set_scheduled_leader(leader_rotation_interval, write_stage_info.my_id);
+            let mut wblockthread = write_stage_info.blockthread.write().unwrap();
+            wblockthread.set_scheduled_leader(leader_rotation_interval, write_stage_info.my_id);
         }
 
         let mut last_id = write_stage_info
@@ -396,14 +396,14 @@ mod tests {
             write_stage_info.entry_sender.send(new_entry).unwrap();
         }
 
-        // Set the scheduled next leader in the crdt to some other node
+        // Set the scheduled next leader in the blockthread to some other node
         let leader2_keypair = Keypair::new();
         let leader2_info = Node::new_localhost_with_pubkey(leader2_keypair.pubkey());
 
         {
-            let mut wcrdt = write_stage_info.crdt.write().unwrap();
-            wcrdt.insert(&leader2_info.info);
-            wcrdt.set_scheduled_leader(2 * leader_rotation_interval, leader2_keypair.pubkey());
+            let mut wblockthread = write_stage_info.blockthread.write().unwrap();
+            wblockthread.insert(&leader2_info.info);
+            wblockthread.set_scheduled_leader(2 * leader_rotation_interval, leader2_keypair.pubkey());
         }
 
         // Input another leader_rotation_interval dummy entries one at a time,
@@ -422,7 +422,7 @@ mod tests {
 
         // Make sure the ledger contains exactly 2 * leader_rotation_interval entries
         let (entry_height, _) =
-            process_ledger(&write_stage_info.leader_ledger_path, &write_stage_info.bank);
+            process_ledger(&write_stage_info.leader_ledger_path, &write_stage_info.transaction_processor);
         remove_dir_all(write_stage_info.leader_ledger_path).unwrap();
         assert_eq!(entry_height, 2 * leader_rotation_interval);
     }
@@ -440,13 +440,13 @@ mod tests {
         // time during which a leader is in power
         let num_epochs = 3;
 
-        let mut crdt = Crdt::new(leader_info.info).expect("Crdt::new");
-        crdt.set_leader_rotation_interval(leader_rotation_interval as u64);
+        let mut blockthread = BlockThread::new(leader_info.info).expect("BlockThread::new");
+        blockthread.set_leader_rotation_interval(leader_rotation_interval as u64);
         for i in 0..num_epochs {
-            crdt.set_scheduled_leader(i * leader_rotation_interval, my_id)
+            blockthread.set_scheduled_leader(i * leader_rotation_interval, my_id)
         }
 
-        let crdt = Arc::new(RwLock::new(crdt));
+        let blockthread = Arc::new(RwLock::new(blockthread));
         let entry = Entry::new(&Hash::default(), 0, vec![]);
 
         // A vector that is completely within a certain epoch should return that
@@ -454,7 +454,7 @@ mod tests {
         let mut len = leader_rotation_interval as usize - 1;
         let mut input = vec![entry.clone(); len];
         let mut result = WriteStage::find_leader_rotation_index(
-            &crdt,
+            &blockthread,
             leader_rotation_interval,
             (num_epochs - 1) * leader_rotation_interval,
             input.clone(),
@@ -467,7 +467,7 @@ mod tests {
         len = leader_rotation_interval as usize - 1;
         input = vec![entry.clone(); len];
         result = WriteStage::find_leader_rotation_index(
-            &crdt,
+            &blockthread,
             leader_rotation_interval,
             (num_epochs * leader_rotation_interval) - 1,
             input.clone(),
@@ -482,7 +482,7 @@ mod tests {
         len = 1;
         let mut input = vec![entry.clone(); len];
         result = WriteStage::find_leader_rotation_index(
-            &crdt,
+            &blockthread,
             leader_rotation_interval,
             leader_rotation_interval - 1,
             input.clone(),
@@ -495,7 +495,7 @@ mod tests {
         len = leader_rotation_interval as usize;
         input = vec![entry.clone(); len];
         result = WriteStage::find_leader_rotation_index(
-            &crdt,
+            &blockthread,
             leader_rotation_interval,
             leader_rotation_interval - 1,
             input.clone(),
@@ -508,7 +508,7 @@ mod tests {
         len = (num_epochs - 1) as usize * leader_rotation_interval as usize;
         input = vec![entry.clone(); len];
         result = WriteStage::find_leader_rotation_index(
-            &crdt,
+            &blockthread,
             leader_rotation_interval,
             leader_rotation_interval - 1,
             input.clone(),
@@ -522,7 +522,7 @@ mod tests {
         len = (num_epochs - 1) as usize * leader_rotation_interval as usize + 1;
         input = vec![entry.clone(); len];
         result = WriteStage::find_leader_rotation_index(
-            &crdt,
+            &blockthread,
             leader_rotation_interval,
             leader_rotation_interval - 1,
             input.clone(),
@@ -535,7 +535,7 @@ mod tests {
         len = leader_rotation_interval as usize;
         input = vec![entry.clone(); len];
         result = WriteStage::find_leader_rotation_index(
-            &crdt,
+            &blockthread,
             leader_rotation_interval,
             num_epochs * leader_rotation_interval,
             input.clone(),

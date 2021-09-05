@@ -3,9 +3,9 @@
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
 
-use bank::Bank;
+use transaction_processor::TransactionProcessor;
 use bincode::{deserialize, serialize};
-use crdt::{Crdt, CrdtError, NodeInfo};
+use blockthread::{BlockThread, BlockThreadError, NodeInfo};
 use hash::Hash;
 use log::Level;
 use ncp::Ncp;
@@ -194,7 +194,7 @@ impl ThinClient {
         // In the future custom contracts would need their own introspection
         self.balances
             .get(pubkey)
-            .map(Bank::read_balance)
+            .map(TransactionProcessor::read_balance)
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "AccountNotFound"))
     }
 
@@ -331,7 +331,7 @@ impl ThinClient {
         Ok(())
     }
 
-    /// Check a signature in the bank. This method blocks
+    /// Check a signature in the transaction_processor. This method blocks
     /// until the server sends a response.
     pub fn check_signature(&mut self, signature: &Signature) -> bool {
         trace!("check_signature");
@@ -373,14 +373,14 @@ impl Drop for ThinClient {
 
 pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> Result<NodeInfo> {
     let exit = Arc::new(AtomicBool::new(false));
-    let (node, gossip_socket) = Crdt::spy_node();
+    let (node, gossip_socket) = BlockThread::spy_node();
     let my_addr = gossip_socket.local_addr().unwrap();
-    let crdt = Arc::new(RwLock::new(Crdt::new(node).expect("Crdt::new")));
+    let blockthread = Arc::new(RwLock::new(BlockThread::new(node).expect("BlockThread::new")));
     let window = Arc::new(RwLock::new(vec![]));
-    let ncp = Ncp::new(&crdt.clone(), window, None, gossip_socket, exit.clone());
+    let ncp = Ncp::new(&blockthread.clone(), window, None, gossip_socket, exit.clone());
 
     let leader_entry_point = NodeInfo::new_entry_point(&leader_ncp);
-    crdt.write().unwrap().insert(&leader_entry_point);
+    blockthread.write().unwrap().insert(&leader_entry_point);
 
     sleep(Duration::from_millis(100));
 
@@ -395,17 +395,17 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
     loop {
         trace!("polling {:?} for leader from {:?}", leader_ncp, my_addr);
 
-        if let Some(l) = crdt.read().unwrap().leader_data() {
+        if let Some(l) = blockthread.read().unwrap().leader_data() {
             leader = Some(l.clone());
             break;
         }
 
         if log_enabled!(Level::Trace) {
-            trace!("{}", crdt.read().unwrap().node_info_trace());
+            trace!("{}", blockthread.read().unwrap().node_info_trace());
         }
 
         if now.elapsed() > deadline {
-            return Err(Error::CrdtError(CrdtError::NoLeader));
+            return Err(Error::BlockThreadError(BlockThreadError::NoLeader));
         }
 
         sleep(Duration::from_millis(100));
@@ -414,7 +414,7 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
     ncp.close()?;
 
     if log_enabled!(Level::Trace) {
-        trace!("{}", crdt.read().unwrap().node_info_trace());
+        trace!("{}", blockthread.read().unwrap().node_info_trace());
     }
 
     Ok(leader.unwrap().clone())
@@ -423,8 +423,8 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bank::Bank;
-    use crdt::Node;
+    use transaction_processor::TransactionProcessor;
+    use blockthread::Node;
     use fullnode::Fullnode;
     use ledger::LedgerWriter;
     use logger;
@@ -454,13 +454,13 @@ mod tests {
         let leader_data = leader.info.clone();
 
         let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let transaction_processor = TransactionProcessor::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let ledger_path = tmp_ledger("thin_client", &alice);
 
-        let server = Fullnode::new_with_bank(
+        let server = Fullnode::new_with_transaction_processor(
             leader_keypair,
-            bank,
+            transaction_processor,
             0,
             &[],
             leader,
@@ -478,7 +478,7 @@ mod tests {
         let mut client = ThinClient::new(
             leader_data.contact_info.rpu,
             requests_socket,
-            leader_data.contact_info.tpu,
+            leader_data.contact_info.tx_creator,
             transactions_socket,
         );
         let last_id = client.get_last_id();
@@ -500,14 +500,14 @@ mod tests {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let transaction_processor = TransactionProcessor::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
         let ledger_path = tmp_ledger("bad_sig", &alice);
 
-        let server = Fullnode::new_with_bank(
+        let server = Fullnode::new_with_transaction_processor(
             leader_keypair,
-            bank,
+            transaction_processor,
             0,
             &[],
             leader,
@@ -528,7 +528,7 @@ mod tests {
         let mut client = ThinClient::new(
             leader_data.contact_info.rpu,
             requests_socket,
-            leader_data.contact_info.tpu,
+            leader_data.contact_info.tx_creator,
             transactions_socket,
         );
         let last_id = client.get_last_id();
@@ -560,14 +560,14 @@ mod tests {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let transaction_processor = TransactionProcessor::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
         let ledger_path = tmp_ledger("client_check_signature", &alice);
 
-        let server = Fullnode::new_with_bank(
+        let server = Fullnode::new_with_transaction_processor(
             leader_keypair,
-            bank,
+            transaction_processor,
             0,
             &[],
             leader,
@@ -587,7 +587,7 @@ mod tests {
         let mut client = ThinClient::new(
             leader_data.contact_info.rpu,
             requests_socket,
-            leader_data.contact_info.tpu,
+            leader_data.contact_info.tx_creator,
             transactions_socket,
         );
         let last_id = client.get_last_id();
@@ -621,14 +621,14 @@ mod tests {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let transaction_processor = TransactionProcessor::new(&alice);
         let bob_keypair = Keypair::new();
         let leader_data = leader.info.clone();
         let ledger_path = tmp_ledger("zero_balance_check", &alice);
 
-        let server = Fullnode::new_with_bank(
+        let server = Fullnode::new_with_transaction_processor(
             leader_keypair,
-            bank,
+            transaction_processor,
             0,
             &[],
             leader,
@@ -648,7 +648,7 @@ mod tests {
         let mut client = ThinClient::new(
             leader_data.contact_info.rpu,
             requests_socket,
-            leader_data.contact_info.tpu,
+            leader_data.contact_info.tx_creator,
             transactions_socket,
         );
         let last_id = client.get_last_id();

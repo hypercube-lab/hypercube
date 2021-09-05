@@ -6,7 +6,7 @@ extern crate serde_json;
 extern crate hypercube;
 
 use clap::{App, Arg};
-use hypercube::crdt::Node;
+use hypercube::blockthread::Node;
 use hypercube::fullnode::Config;
 use hypercube::logger;
 use hypercube::replicator::Replicator;

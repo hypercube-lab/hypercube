@@ -113,7 +113,7 @@ impl Drone {
         let mut client = ThinClient::new(
             leader.contact_info.rpu,
             requests_socket,
-            leader.contact_info.tpu,
+            leader.contact_info.tx_creator,
             transactions_socket,
         );
         let last_id = client.get_last_id();
@@ -223,8 +223,8 @@ pub fn run_local_drone(mint_keypair: Keypair, network: SocketAddr, sender: Sende
 
 #[cfg(test)]
 mod tests {
-    use bank::Bank;
-    use crdt::Node;
+    use transaction_processor::TransactionProcessor;
+    use blockthread::Node;
     use drone::{Drone, DroneRequest, REQUEST_CAP, TIME_SLICE};
     use fullnode::Fullnode;
     use logger;
@@ -323,15 +323,15 @@ mod tests {
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         let alice = Mint::new(10_000_000);
-        let bank = Bank::new(&alice);
+        let transaction_processor = TransactionProcessor::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let carlos_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
         let ledger_path = tmp_ledger_path("send_airdrop");
 
-        let server = Fullnode::new_with_bank(
+        let server = Fullnode::new_with_transaction_processor(
             leader_keypair,
-            bank,
+            transaction_processor,
             0,
             &[],
             leader,
@@ -359,7 +359,7 @@ mod tests {
         let mut client = ThinClient::new(
             leader_data.contact_info.rpu,
             requests_socket,
-            leader_data.contact_info.tpu,
+            leader_data.contact_info.tx_creator,
             transactions_socket,
         );
 
@@ -385,7 +385,7 @@ mod tests {
         let mut client = ThinClient::new(
             leader_data.contact_info.rpu,
             requests_socket,
-            leader_data.contact_info.tpu,
+            leader_data.contact_info.tx_creator,
             transactions_socket,
         );
 

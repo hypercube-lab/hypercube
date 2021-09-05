@@ -1,8 +1,8 @@
 //! The `fullnode` module hosts all the fullnode microservices.
 
-use bank::Bank;
+use transaction_processor::TransactionProcessor;
 use broadcast_stage::BroadcastStage;
-use crdt::{Crdt, Node, NodeInfo};
+use blockthread::{BlockThread, Node, NodeInfo};
 use drone::DRONE_PORT;
 use entry::Entry;
 use ledger::read_ledger;
@@ -17,8 +17,8 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::Result;
-use tpu::{Tpu, TpuReturnType};
-use tvu::{Tvu, TvuReturnType};
+use tx_creator::{TxCreator, TxCreatorReturnType};
+use tx_signer::{TxSigner, TxSignerReturnType};
 use untrusted::Input;
 use window;
 
@@ -28,43 +28,43 @@ pub enum NodeRole {
 }
 
 pub struct LeaderServices {
-    tpu: Tpu,
+    tx_creator: TxCreator,
     broadcast_stage: BroadcastStage,
 }
 
 impl LeaderServices {
-    fn new(tpu: Tpu, broadcast_stage: BroadcastStage) -> Self {
+    fn new(tx_creator: TxCreator, broadcast_stage: BroadcastStage) -> Self {
         LeaderServices {
-            tpu,
+            tx_creator,
             broadcast_stage,
         }
     }
 
-    pub fn join(self) -> Result<Option<TpuReturnType>> {
+    pub fn join(self) -> Result<Option<TxCreatorReturnType>> {
         self.broadcast_stage.join()?;
-        self.tpu.join()
+        self.tx_creator.join()
     }
 
     pub fn exit(&self) -> () {
-        self.tpu.exit();
+        self.tx_creator.exit();
     }
 }
 
 pub struct ValidatorServices {
-    tvu: Tvu,
+    tx_signer: TxSigner,
 }
 
 impl ValidatorServices {
-    fn new(tvu: Tvu) -> Self {
-        ValidatorServices { tvu }
+    fn new(tx_signer: TxSigner) -> Self {
+        ValidatorServices { tx_signer }
     }
 
-    pub fn join(self) -> Result<Option<TvuReturnType>> {
-        self.tvu.join()
+    pub fn join(self) -> Result<Option<TxSignerReturnType>> {
+        self.tx_signer.join()
     }
 
     pub fn exit(&self) -> () {
-        self.tvu.exit()
+        self.tx_signer.exit()
     }
 }
 
@@ -79,8 +79,8 @@ pub struct Fullnode {
     rpu: Option<Rpu>,
     rpc_service: JsonRpcService,
     ncp: Ncp,
-    bank: Arc<Bank>,
-    crdt: Arc<RwLock<Crdt>>,
+    transaction_processor: Arc<TransactionProcessor>,
+    blockthread: Arc<RwLock<BlockThread>>,
     ledger_path: String,
     sigverify_disabled: bool,
     shared_window: window::SharedWindow,
@@ -124,8 +124,8 @@ impl Fullnode {
         sigverify_disabled: bool,
         leader_rotation_interval: Option<u64>,
     ) -> Self {
-        info!("creating bank...");
-        let (bank, entry_height, ledger_tail) = Self::new_bank_from_ledger(ledger_path);
+        info!("creating transaction_processor...");
+        let (transaction_processor, entry_height, ledger_tail) = Self::new_transaction_processor_from_ledger(ledger_path);
 
         info!("creating networking stack...");
         let local_gossip_addr = node.sockets.gossip.local_addr().unwrap();
@@ -138,9 +138,9 @@ impl Fullnode {
         let local_requests_addr = node.sockets.requests.local_addr().unwrap();
         let requests_addr = node.info.contact_info.rpu;
         let leader_info = leader_addr.map(|i| NodeInfo::new_entry_point(&i));
-        let server = Self::new_with_bank(
+        let server = Self::new_with_transaction_processor(
             keypair,
-            bank,
+            transaction_processor,
             entry_height,
             &ledger_tail,
             node,
@@ -183,7 +183,7 @@ impl Fullnode {
     ///       |      |     ^               |
     ///       |      |     |               |
     ///       |      |  .--+---.           |
-    ///       |      |  | Bank |           |
+    ///       |      |  | TransactionProcessor |           |
     ///       |      |  `------`           |
     ///       |      |     ^               |
     ///       |      |     |               |    .------------.
@@ -204,7 +204,7 @@ impl Fullnode {
     ///               |               ^               |
     ///               |               |               |
     ///               |            .--+---.           |
-    ///               |            | Bank |           |
+    ///               |            | TransactionProcessor |           |
     ///               |            `------`           |
     ///               |               ^               |
     ///   .--------.  |               |               |    .------------.
@@ -220,9 +220,9 @@ impl Fullnode {
     ///               `-------------------------------`
     /// ```
     #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
-    pub fn new_with_bank(
+    pub fn new_with_transaction_processor(
         keypair: Keypair,
-        bank: Bank,
+        transaction_processor: TransactionProcessor,
         entry_height: u64,
         ledger_tail: &[Entry],
         mut node: Node,
@@ -236,10 +236,10 @@ impl Fullnode {
             node.info.leader_id = node.info.id;
         }
         let exit = Arc::new(AtomicBool::new(false));
-        let bank = Arc::new(bank);
+        let transaction_processor = Arc::new(transaction_processor);
 
         let rpu = Some(Rpu::new(
-            &bank,
+            &transaction_processor,
             node.sockets
                 .requests
                 .try_clone()
@@ -251,7 +251,7 @@ impl Fullnode {
         ));
 
         // TODO: this code assumes this node is the leader
-        let mut drone_addr = node.info.contact_info.tpu;
+        let mut drone_addr = node.info.contact_info.tx_creator;
         drone_addr.set_port(DRONE_PORT);
 
         // Use custom RPC port, if provided (`Some(port)`)
@@ -260,8 +260,8 @@ impl Fullnode {
         // If rpc_port == `Some(0)`, node will dynamically choose any open port. Useful for tests.
         let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::from(0)), rpc_port.unwrap_or(RPC_PORT));
         let rpc_service = JsonRpcService::new(
-            &bank,
-            node.info.contact_info.tpu,
+            &transaction_processor,
+            node.info.contact_info.tx_creator,
             drone_addr,
             rpc_addr,
             exit.clone(),
@@ -270,14 +270,14 @@ impl Fullnode {
         let window = window::new_window_from_entries(ledger_tail, entry_height, &node.info);
         let shared_window = Arc::new(RwLock::new(window));
 
-        let mut crdt = Crdt::new(node.info).expect("Crdt::new");
+        let mut blockthread = BlockThread::new(node.info).expect("BlockThread::new");
         if let Some(interval) = leader_rotation_interval {
-            crdt.set_leader_rotation_interval(interval);
+            blockthread.set_leader_rotation_interval(interval);
         }
-        let crdt = Arc::new(RwLock::new(crdt));
+        let blockthread = Arc::new(RwLock::new(blockthread));
 
         let ncp = Ncp::new(
-            &crdt,
+            &blockthread,
             shared_window.clone(),
             Some(ledger_path),
             node.sockets.gossip,
@@ -289,13 +289,13 @@ impl Fullnode {
         match leader_info {
             Some(leader_info) => {
                 // Start in validator mode.
-                // TODO: let Crdt get that data from the network?
-                crdt.write().unwrap().insert(leader_info);
-                let tvu = Tvu::new(
+                // TODO: let BlockThread get that data from the network?
+                blockthread.write().unwrap().insert(leader_info);
+                let tx_signer = TxSigner::new(
                     keypair.clone(),
-                    &bank,
+                    &transaction_processor,
                     entry_height,
-                    crdt.clone(),
+                    blockthread.clone(),
                     shared_window.clone(),
                     node.sockets
                         .replicate
@@ -312,15 +312,15 @@ impl Fullnode {
                         .expect("Failed to clone retransmit socket"),
                     Some(ledger_path),
                 );
-                let validator_state = ValidatorServices::new(tvu);
+                let validator_state = ValidatorServices::new(tx_signer);
                 node_role = Some(NodeRole::Validator(validator_state));
             }
             None => {
                 // Start in leader mode.
-                let (tpu, entry_receiver, tpu_exit) = Tpu::new(
+                let (tx_creator, entry_receiver, tx_creator_exit) = TxCreator::new(
                     keypair.clone(),
-                    &bank,
-                    &crdt,
+                    &transaction_processor,
+                    &blockthread,
                     Default::default(),
                     node.sockets
                         .transaction
@@ -337,22 +337,22 @@ impl Fullnode {
                         .broadcast
                         .try_clone()
                         .expect("Failed to clone broadcast socket"),
-                    crdt.clone(),
+                    blockthread.clone(),
                     shared_window.clone(),
                     entry_height,
                     entry_receiver,
-                    tpu_exit,
+                    tx_creator_exit,
                 );
-                let leader_state = LeaderServices::new(tpu, broadcast_stage);
+                let leader_state = LeaderServices::new(tx_creator, broadcast_stage);
                 node_role = Some(NodeRole::Leader(leader_state));
             }
         }
 
         Fullnode {
             keypair,
-            crdt,
+            blockthread,
             shared_window,
-            bank,
+            transaction_processor,
             sigverify_disabled,
             rpu,
             ncp,
@@ -371,29 +371,29 @@ impl Fullnode {
     }
 
     fn leader_to_validator(&mut self) -> Result<()> {
-        // TODO: We can avoid building the bank again once RecordStage is
-        // integrated with BankingStage
-        let (bank, entry_height, _) = Self::new_bank_from_ledger(&self.ledger_path);
-        self.bank = Arc::new(bank);
+        // TODO: We can avoid building the transaction_processor again once RecordStage is
+        // integrated with TransactionProcessoringStage
+        let (transaction_processor, entry_height, _) = Self::new_transaction_processor_from_ledger(&self.ledger_path);
+        self.transaction_processor = Arc::new(transaction_processor);
 
         {
-            let mut wcrdt = self.crdt.write().unwrap();
-            let scheduled_leader = wcrdt.get_scheduled_leader(entry_height);
+            let mut wblockthread = self.blockthread.write().unwrap();
+            let scheduled_leader = wblockthread.get_scheduled_leader(entry_height);
             match scheduled_leader {
                 //TODO: Handle the case where we don't know who the next
                 //scheduled leader is
                 None => (),
-                Some(leader_id) => wcrdt.set_leader(leader_id),
+                Some(leader_id) => wblockthread.set_leader(leader_id),
             }
         }
 
-        // Make a new RPU to serve requests out of the new bank we've created
+        // Make a new RPU to serve requests out of the new transaction_processor we've created
         // instead of the old one
         if self.rpu.is_some() {
             let old_rpu = self.rpu.take().unwrap();
             old_rpu.close()?;
             self.rpu = Some(Rpu::new(
-                &self.bank,
+                &self.transaction_processor,
                 self.requests_socket
                     .try_clone()
                     .expect("Failed to clone requests socket"),
@@ -403,11 +403,11 @@ impl Fullnode {
             ));
         }
 
-        let tvu = Tvu::new(
+        let tx_signer = TxSigner::new(
             self.keypair.clone(),
-            &self.bank,
+            &self.transaction_processor,
             entry_height,
-            self.crdt.clone(),
+            self.blockthread.clone(),
             self.shared_window.clone(),
             self.replicate_socket
                 .iter()
@@ -421,17 +421,17 @@ impl Fullnode {
                 .expect("Failed to clone retransmit socket"),
             Some(&self.ledger_path),
         );
-        let validator_state = ValidatorServices::new(tvu);
+        let validator_state = ValidatorServices::new(tx_signer);
         self.node_role = Some(NodeRole::Validator(validator_state));
         Ok(())
     }
 
     fn validator_to_leader(&mut self, entry_height: u64) {
-        self.crdt.write().unwrap().set_leader(self.keypair.pubkey());
-        let (tpu, blob_receiver, tpu_exit) = Tpu::new(
+        self.blockthread.write().unwrap().set_leader(self.keypair.pubkey());
+        let (tx_creator, blob_receiver, tx_creator_exit) = TxCreator::new(
             self.keypair.clone(),
-            &self.bank,
-            &self.crdt,
+            &self.transaction_processor,
+            &self.blockthread,
             Default::default(),
             self.transaction_sockets
                 .iter()
@@ -446,13 +446,13 @@ impl Fullnode {
             self.broadcast_socket
                 .try_clone()
                 .expect("Failed to clone broadcast socket"),
-            self.crdt.clone(),
+            self.blockthread.clone(),
             self.shared_window.clone(),
             entry_height,
             blob_receiver,
-            tpu_exit,
+            tx_creator_exit,
         );
-        let leader_state = LeaderServices::new(tpu, broadcast_stage);
+        let leader_state = LeaderServices::new(tx_creator, broadcast_stage);
         self.node_role = Some(NodeRole::Leader(leader_state));
     }
 
@@ -460,14 +460,14 @@ impl Fullnode {
         let node_role = self.node_role.take();
         match node_role {
             Some(NodeRole::Leader(leader_services)) => match leader_services.join()? {
-                Some(TpuReturnType::LeaderRotation) => {
+                Some(TxCreatorReturnType::LeaderRotation) => {
                     self.leader_to_validator()?;
                     Ok(Some(FullnodeReturnType::LeaderRotation))
                 }
                 _ => Ok(None),
             },
             Some(NodeRole::Validator(validator_services)) => match validator_services.join()? {
-                Some(TvuReturnType::LeaderRotation(entry_height)) => {
+                Some(TxSignerReturnType::LeaderRotation(entry_height)) => {
                     self.validator_to_leader(entry_height);
                     Ok(Some(FullnodeReturnType::LeaderRotation))
                 }
@@ -498,23 +498,23 @@ impl Fullnode {
     // TODO: only used for testing, get rid of this once we have actual
     // leader scheduling
     pub fn set_scheduled_leader(&self, leader_id: Pubkey, entry_height: u64) {
-        self.crdt
+        self.blockthread
             .write()
             .unwrap()
             .set_scheduled_leader(entry_height, leader_id);
     }
 
-    fn new_bank_from_ledger(ledger_path: &str) -> (Bank, u64, Vec<Entry>) {
-        let bank = Bank::new_default(false);
+    fn new_transaction_processor_from_ledger(ledger_path: &str) -> (TransactionProcessor, u64, Vec<Entry>) {
+        let transaction_processor = TransactionProcessor::new_default(false);
         let entries = read_ledger(ledger_path, true).expect("opening ledger");
         let entries = entries
             .map(|e| e.unwrap_or_else(|err| panic!("failed to parse entry. error: {}", err)));
         info!("processing ledger...");
-        let (entry_height, ledger_tail) = bank.process_ledger(entries).expect("process_ledger");
+        let (entry_height, ledger_tail) = transaction_processor.process_ledger(entries).expect("process_ledger");
         // entry_height is the network-wide agreed height of the ledger.
         //  initialize it from the input ledger
         info!("processed {} ledger...", entry_height);
-        (bank, entry_height, ledger_tail)
+        (transaction_processor, entry_height, ledger_tail)
     }
 }
 
@@ -530,12 +530,12 @@ impl Service for Fullnode {
 
         match self.node_role {
             Some(NodeRole::Validator(validator_service)) => {
-                if let Some(TvuReturnType::LeaderRotation(_)) = validator_service.join()? {
+                if let Some(TxSignerReturnType::LeaderRotation(_)) = validator_service.join()? {
                     return Ok(Some(FullnodeReturnType::LeaderRotation));
                 }
             }
             Some(NodeRole::Leader(leader_service)) => {
-                if let Some(TpuReturnType::LeaderRotation) = leader_service.join()? {
+                if let Some(TxCreatorReturnType::LeaderRotation) = leader_service.join()? {
                     return Ok(Some(FullnodeReturnType::LeaderRotation));
                 }
             }
@@ -548,8 +548,8 @@ impl Service for Fullnode {
 
 #[cfg(test)]
 mod tests {
-    use bank::Bank;
-    use crdt::Node;
+    use transaction_processor::TransactionProcessor;
+    use blockthread::Node;
     use fullnode::{Fullnode, FullnodeReturnType};
     use ledger::genesis;
     use packet::make_consecutive_blobs;
@@ -567,11 +567,11 @@ mod tests {
         let keypair = Keypair::new();
         let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
         let (alice, validator_ledger_path) = genesis("validator_exit", 10_000);
-        let bank = Bank::new(&alice);
+        let transaction_processor = TransactionProcessor::new(&alice);
         let entry = tn.info.clone();
-        let v = Fullnode::new_with_bank(
+        let v = Fullnode::new_with_transaction_processor(
             keypair,
-            bank,
+            transaction_processor,
             0,
             &[],
             tn,
@@ -595,11 +595,11 @@ mod tests {
                 let (alice, validator_ledger_path) =
                     genesis(&format!("validator_parallel_exit_{}", i), 10_000);
                 ledger_paths.push(validator_ledger_path.clone());
-                let bank = Bank::new(&alice);
+                let transaction_processor = TransactionProcessor::new(&alice);
                 let entry = tn.info.clone();
-                Fullnode::new_with_bank(
+                Fullnode::new_with_transaction_processor(
                     keypair,
-                    bank,
+                    transaction_processor,
                     0,
                     &[],
                     tn,
@@ -683,9 +683,9 @@ mod tests {
                 .last()
                 .expect("expected at least one genesis entry")
                 .id;
-            let tvu_address = &validator_info.contact_info.tvu;
+            let tx_signer_address = &validator_info.contact_info.tx_signer;
             let msgs =
-                make_consecutive_blobs(leader_id, total_blobs_to_send, last_id, &tvu_address)
+                make_consecutive_blobs(leader_id, total_blobs_to_send, last_id, &tx_signer_address)
                     .into_iter()
                     .rev()
                     .collect();
@@ -693,14 +693,14 @@ mod tests {
             t_responder
         };
 
-        // Wait for validator to shut down tvu and restart tpu
+        // Wait for validator to shut down tx_signer and restart tx_creator
         match validator.handle_role_transition().unwrap() {
             Some(FullnodeReturnType::LeaderRotation) => (),
             _ => panic!("Expected reason for exit to be leader rotation"),
         }
 
         // Check the validator ledger to make sure it's the right height
-        let (_, entry_height, _) = Fullnode::new_bank_from_ledger(&validator_ledger_path);
+        let (_, entry_height, _) = Fullnode::new_transaction_processor_from_ledger(&validator_ledger_path);
 
         assert_eq!(
             entry_height,

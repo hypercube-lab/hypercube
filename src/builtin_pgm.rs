@@ -81,7 +81,7 @@ impl SystemProgram {
                     accounts[0].program_id = program_id;
                 }
                 SystemProgram::Move { tokens } => {
-                    //bank should be verifying correctness
+                    //transaction_processor should be verifying correctness
                     accounts[0].tokens -= tokens;
                     accounts[1].tokens += tokens;
                 }

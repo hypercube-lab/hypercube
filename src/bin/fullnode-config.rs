@@ -5,7 +5,7 @@ extern crate serde_json;
 extern crate hypercube;
 
 use clap::{App, Arg};
-use hypercube::crdt::FULLNODE_PORT_RANGE;
+use hypercube::blockthread::FULLNODE_PORT_RANGE;
 use hypercube::fullnode::Config;
 use hypercube::logger;
 use hypercube::netutil::{get_ip_addr, get_public_ip_addr, parse_port_or_addr};
