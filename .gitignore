@@ -3,7 +3,7 @@ Cargo.lock
 
 **/*.rs.bk
 .cargo
-.py
+
 
 # node configuration files
 /config/
