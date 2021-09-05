@@ -1,15 +1,15 @@
-//! The `banking_stage` processes Transaction messages. It is intended to be used
+//! The `transaction_processoring_stage` processes Transaction messages. It is intended to be used
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
 
-use bank::Bank;
+use transaction_processor::TransactionProcessor;
 use bincode::deserialize;
 use fin_plan_transaction::BudgetTransaction;
 use counter::Counter;
 use entry::Entry;
 use log::Level;
 use packet::Packets;
-use poh_recorder::PohRecorder;
+use pod_recorder::PodRecorder;
 use rayon::prelude::*;
 use result::{Error, Result};
 use service::Service;
@@ -25,11 +25,11 @@ use std::time::Instant;
 use timing;
 use transaction::Transaction;
 
-// number of threads is 1 until mt bank is ready
+// number of threads is 1 until mt transaction_processor is ready
 pub const NUM_THREADS: usize = 1;
 
-/// Stores the stage's thread handle and output receiver.
-pub struct BankingStage {
+/// Stores the stage's thread handle and outx_creatort receiver.
+pub struct TransactionProcessoringStage {
     /// Handle to the stage's thread.
     thread_hdls: Vec<JoinHandle<()>>,
 }
@@ -37,7 +37,7 @@ pub struct BankingStage {
 pub enum Config {
     /// * `Tick` - Run full PoH thread.  Tick is a rough estimate of how many hashes to roll before transmitting a new entry.
     Tick(usize),
-    /// * `Sleep`- Low power mode.  Sleep is a rough estimate of how long to sleep before rolling 1 poh once and producing 1
+    /// * `Sleep`- Low power mode.  Sleep is a rough estimate of how long to sleep before rolling 1 pod once and producing 1
     /// tick.
     Sleep(Duration),
 }
@@ -48,57 +48,57 @@ impl Default for Config {
         Config::Sleep(Duration::from_millis(500))
     }
 }
-impl BankingStage {
-    /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
+impl TransactionProcessoringStage {
+    /// Create the stage using `transaction_processor`. Exit when `verified_receiver` is dropped.
     pub fn new(
-        bank: &Arc<Bank>,
+        transaction_processor: &Arc<TransactionProcessor>,
         verified_receiver: Receiver<VerifiedPackets>,
         config: Config,
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
         let shared_verified_receiver = Arc::new(Mutex::new(verified_receiver));
-        let poh = PohRecorder::new(bank.clone(), entry_sender);
-        let tick_poh = poh.clone();
-        // Tick producer is a headless producer, so when it exits it should notify the banking stage.
+        let pod = PodRecorder::new(transaction_processor.clone(), entry_sender);
+        let tick_pod = pod.clone();
+        // Tick producer is a headless producer, so when it exits it should notify the transaction_processoring stage.
         // Since channel are not used to talk between these threads an AtomicBool is used as a
         // signal.
-        let poh_exit = Arc::new(AtomicBool::new(false));
-        let banking_exit = poh_exit.clone();
-        // Single thread to generate entries from many banks.
-        // This thread talks to poh_service and broadcasts the entries once they have been recorded.
-        // Once an entry has been recorded, its last_id is registered with the bank.
+        let pod_exit = Arc::new(AtomicBool::new(false));
+        let transaction_processoring_exit = pod_exit.clone();
+        // Single thread to generate entries from many transaction_processors.
+        // This thread talks to pod_service and broadcasts the entries once they have been recorded.
+        // Once an entry has been recorded, its last_id is registered with the transaction_processor.
         let tick_producer = Builder::new()
-            .name("hypercube-banking-stage-tick_producer".to_string())
+            .name("hypercube-transaction_processoring-stage-tick_producer".to_string())
             .spawn(move || {
-                if let Err(e) = Self::tick_producer(&tick_poh, &config, &poh_exit) {
+                if let Err(e) = Self::tick_producer(&tick_pod, &config, &pod_exit) {
                     match e {
                         Error::SendError => (),
                         _ => error!(
-                            "hypercube-banking-stage-tick_producer unexpected error {:?}",
+                            "hypercube-transaction_processoring-stage-tick_producer unexpected error {:?}",
                             e
                         ),
                     }
                 }
                 debug!("tick producer exiting");
-                poh_exit.store(true, Ordering::Relaxed);
+                pod_exit.store(true, Ordering::Relaxed);
             }).unwrap();
 
-        // Many banks that process transactions in parallel.
+        // Many transaction_processors that process transactions in parallel.
         let mut thread_hdls: Vec<JoinHandle<()>> = (0..NUM_THREADS)
             .into_iter()
             .map(|_| {
-                let thread_bank = bank.clone();
+                let thread_transaction_processor = transaction_processor.clone();
                 let thread_verified_receiver = shared_verified_receiver.clone();
-                let thread_poh = poh.clone();
-                let thread_banking_exit = banking_exit.clone();
+                let thread_pod = pod.clone();
+                let thread_transaction_processoring_exit = transaction_processoring_exit.clone();
                 Builder::new()
-                    .name("hypercube-banking-stage-tx".to_string())
+                    .name("hypercube-transaction_processoring-stage-tx".to_string())
                     .spawn(move || {
                         loop {
                             if let Err(e) = Self::process_packets(
-                                &thread_bank,
+                                &thread_transaction_processor,
                                 &thread_verified_receiver,
-                                &thread_poh,
+                                &thread_pod,
                             ) {
                                 debug!("got error {:?}", e);
                                 match e {
@@ -108,19 +108,19 @@ impl BankingStage {
                                     }
                                     Error::RecvError(_) => break,
                                     Error::SendError => break,
-                                    _ => error!("hypercube-banking-stage-tx {:?}", e),
+                                    _ => error!("hypercube-transaction_processoring-stage-tx {:?}", e),
                                 }
                             }
-                            if thread_banking_exit.load(Ordering::Relaxed) {
+                            if thread_transaction_processoring_exit.load(Ordering::Relaxed) {
                                 debug!("tick service exited");
                                 break;
                             }
                         }
-                        thread_banking_exit.store(true, Ordering::Relaxed);
+                        thread_transaction_processoring_exit.store(true, Ordering::Relaxed);
                     }).unwrap()
             }).collect();
         thread_hdls.push(tick_producer);
-        (BankingStage { thread_hdls }, entry_receiver)
+        (TransactionProcessoringStage { thread_hdls }, entry_receiver)
     }
 
     /// Convert the transactions from a blob of binary data to a vector of transactions and
@@ -135,20 +135,20 @@ impl BankingStage {
             }).collect()
     }
 
-    fn tick_producer(poh: &PohRecorder, config: &Config, poh_exit: &AtomicBool) -> Result<()> {
+    fn tick_producer(pod: &PodRecorder, config: &Config, pod_exit: &AtomicBool) -> Result<()> {
         loop {
             match *config {
                 Config::Tick(num) => {
                     for _ in 0..num {
-                        poh.hash();
+                        pod.hash();
                     }
                 }
                 Config::Sleep(duration) => {
                     sleep(duration);
                 }
             }
-            poh.tick()?;
-            if poh_exit.load(Ordering::Relaxed) {
+            pod.tick()?;
+            if pod_exit.load(Ordering::Relaxed) {
                 debug!("tick service exited");
                 return Ok(());
             }
@@ -156,16 +156,16 @@ impl BankingStage {
     }
 
     fn process_transactions(
-        bank: &Arc<Bank>,
+        transaction_processor: &Arc<TransactionProcessor>,
         transactions: &[Transaction],
-        poh: &PohRecorder,
+        pod: &PodRecorder,
     ) -> Result<()> {
         debug!("transactions: {}", transactions.len());
         let mut chunk_start = 0;
         while chunk_start != transactions.len() {
             let chunk_end = chunk_start + Entry::num_will_fit(&transactions[chunk_start..]);
 
-            let results = bank.process_transactions(&transactions[chunk_start..chunk_end]);
+            let results = transaction_processor.process_transactions(&transactions[chunk_start..chunk_end]);
 
             let processed_transactions: Vec<_> = transactions[chunk_start..chunk_end]
                 .into_iter()
@@ -181,7 +181,7 @@ impl BankingStage {
             if !processed_transactions.is_empty() {
                 let hash = Transaction::hash(&processed_transactions);
                 debug!("processed ok: {} {}", processed_transactions.len(), hash);
-                poh.record(hash, processed_transactions)?;
+                pod.record(hash, processed_transactions)?;
             }
             chunk_start = chunk_end;
         }
@@ -189,12 +189,12 @@ impl BankingStage {
         Ok(())
     }
 
-    /// Process the incoming packets and send output `Signal` messages to `signal_sender`.
+    /// Process the incoming packets and send outx_creatort `Signal` messages to `signal_sender`.
     /// Discard packets via `packet_recycler`.
     pub fn process_packets(
-        bank: &Arc<Bank>,
+        transaction_processor: &Arc<TransactionProcessor>,
         verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
-        poh: &PohRecorder,
+        pod: &PodRecorder,
     ) -> Result<()> {
         let recv_start = Instant::now();
         let mms = verified_receiver
@@ -209,8 +209,8 @@ impl BankingStage {
             timing::duration_as_ms(&recv_start.elapsed()),
             mms.len(),
         );
-        inc_new_counter_info!("banking_stage-entries_received", mms_len);
-        let bank_starting_tx_count = bank.transaction_count();
+        inc_new_counter_info!("transaction_processoring_stage-entries_received", mms_len);
+        let transaction_processor_starting_tx_count = transaction_processor.transaction_count();
         let count = mms.iter().map(|x| x.1.len()).sum();
         let proc_start = Instant::now();
         for (msgs, vers) in mms {
@@ -231,11 +231,11 @@ impl BankingStage {
                     },
                 }).collect();
             debug!("verified transactions {}", transactions.len());
-            Self::process_transactions(bank, &transactions, poh)?;
+            Self::process_transactions(transaction_processor, &transactions, pod)?;
         }
 
         inc_new_counter_info!(
-            "banking_stage-time_ms",
+            "transaction_processoring_stage-time_ms",
             timing::duration_as_ms(&proc_start.elapsed()) as usize
         );
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());
@@ -248,16 +248,16 @@ impl BankingStage {
             reqs_len,
             (reqs_len as f32) / (total_time_s)
         );
-        inc_new_counter_info!("banking_stage-process_packets", count);
+        inc_new_counter_info!("transaction_processoring_stage-process_packets", count);
         inc_new_counter_info!(
-            "banking_stage-process_transactions",
-            bank.transaction_count() - bank_starting_tx_count
+            "transaction_processoring_stage-process_transactions",
+            transaction_processor.transaction_count() - transaction_processor_starting_tx_count
         );
         Ok(())
     }
 }
 
-impl Service for BankingStage {
+impl Service for TransactionProcessoringStage {
     type JoinReturnType = ();
 
     fn join(self) -> thread::Result<()> {
@@ -271,7 +271,7 @@ impl Service for BankingStage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bank::Bank;
+    use transaction_processor::TransactionProcessor;
     use ledger::Block;
     use mint::Mint;
     use packet::to_packets;
@@ -281,32 +281,32 @@ mod tests {
     use transaction::Transaction;
 
     #[test]
-    fn test_banking_stage_shutdown1() {
-        let bank = Bank::new(&Mint::new(2));
+    fn test_transaction_processoring_stage_shutdown1() {
+        let transaction_processor = TransactionProcessor::new(&Mint::new(2));
         let (verified_sender, verified_receiver) = channel();
-        let (banking_stage, _entry_receiver) =
-            BankingStage::new(&Arc::new(bank), verified_receiver, Default::default());
+        let (transaction_processoring_stage, _entry_receiver) =
+            TransactionProcessoringStage::new(&Arc::new(transaction_processor), verified_receiver, Default::default());
         drop(verified_sender);
-        assert_eq!(banking_stage.join().unwrap(), ());
+        assert_eq!(transaction_processoring_stage.join().unwrap(), ());
     }
 
     #[test]
-    fn test_banking_stage_shutdown2() {
-        let bank = Bank::new(&Mint::new(2));
+    fn test_transaction_processoring_stage_shutdown2() {
+        let transaction_processor = TransactionProcessor::new(&Mint::new(2));
         let (_verified_sender, verified_receiver) = channel();
-        let (banking_stage, entry_receiver) =
-            BankingStage::new(&Arc::new(bank), verified_receiver, Default::default());
+        let (transaction_processoring_stage, entry_receiver) =
+            TransactionProcessoringStage::new(&Arc::new(transaction_processor), verified_receiver, Default::default());
         drop(entry_receiver);
-        assert_eq!(banking_stage.join().unwrap(), ());
+        assert_eq!(transaction_processoring_stage.join().unwrap(), ());
     }
 
     #[test]
-    fn test_banking_stage_tick() {
-        let bank = Arc::new(Bank::new(&Mint::new(2)));
-        let start_hash = bank.last_id();
+    fn test_transaction_processoring_stage_tick() {
+        let transaction_processor = Arc::new(TransactionProcessor::new(&Mint::new(2)));
+        let start_hash = transaction_processor.last_id();
         let (verified_sender, verified_receiver) = channel();
-        let (banking_stage, entry_receiver) = BankingStage::new(
-            &bank,
+        let (transaction_processoring_stage, entry_receiver) = TransactionProcessoringStage::new(
+            &transaction_processor,
             verified_receiver,
             Config::Sleep(Duration::from_millis(1)),
         );
@@ -316,18 +316,18 @@ mod tests {
         let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
         assert!(entries.len() != 0);
         assert!(entries.verify(&start_hash));
-        assert_eq!(entries[entries.len() - 1].id, bank.last_id());
-        assert_eq!(banking_stage.join().unwrap(), ());
+        assert_eq!(entries[entries.len() - 1].id, transaction_processor.last_id());
+        assert_eq!(transaction_processoring_stage.join().unwrap(), ());
     }
 
     #[test]
-    fn test_banking_stage_entries_only() {
+    fn test_transaction_processoring_stage_entries_only() {
         let mint = Mint::new(2);
-        let bank = Arc::new(Bank::new(&mint));
-        let start_hash = bank.last_id();
+        let transaction_processor = Arc::new(TransactionProcessor::new(&mint));
+        let start_hash = transaction_processor.last_id();
         let (verified_sender, verified_receiver) = channel();
-        let (banking_stage, entry_receiver) =
-            BankingStage::new(&bank, verified_receiver, Default::default());
+        let (transaction_processoring_stage, entry_receiver) =
+            TransactionProcessoringStage::new(&transaction_processor, verified_receiver, Default::default());
 
         // good tx
         let keypair = mint.keypair();
@@ -362,18 +362,18 @@ mod tests {
             last_id = entries.last().unwrap().id;
         });
         drop(entry_receiver);
-        assert_eq!(banking_stage.join().unwrap(), ());
+        assert_eq!(transaction_processoring_stage.join().unwrap(), ());
     }
     #[test]
-    fn test_banking_stage_entryfication() {
+    fn test_transaction_processoring_stage_entryfication() {
         // In this attack we'll demonstrate that a verifier can interpret the ledger
         // differently if either the server doesn't signal the ledger to add an
         // Entry OR if the verifier tries to parallelize across multiple Entries.
         let mint = Mint::new(2);
-        let bank = Arc::new(Bank::new(&mint));
+        let transaction_processor = Arc::new(TransactionProcessor::new(&mint));
         let (verified_sender, verified_receiver) = channel();
-        let (banking_stage, entry_receiver) =
-            BankingStage::new(&bank, verified_receiver, Default::default());
+        let (transaction_processoring_stage, entry_receiver) =
+            TransactionProcessoringStage::new(&transaction_processor, verified_receiver, Default::default());
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = Keypair::new();
@@ -391,24 +391,24 @@ mod tests {
             .send(vec![(packets[0].clone(), vec![1u8])])
             .unwrap();
         drop(verified_sender);
-        assert_eq!(banking_stage.join().unwrap(), ());
+        assert_eq!(transaction_processoring_stage.join().unwrap(), ());
 
-        // Collect the ledger and feed it to a new bank.
+        // Collect the ledger and feed it to a new transaction_processor.
         let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
-        // same assertion as running through the bank, really...
+        // same assertion as running through the transaction_processor, really...
         assert!(entries.len() >= 2);
 
-        // Assert the user holds one token, not two. If the stage only outputs one
+        // Assert the user holds one token, not two. If the stage only outx_creatorts one
         // entry, then the second transaction will be rejected, because it drives
         // the account balance below zero before the credit is added.
-        let bank = Bank::new(&mint);
+        let transaction_processor = TransactionProcessor::new(&mint);
         for entry in entries {
             assert!(
-                bank.process_transactions(&entry.transactions)
+                transaction_processor.process_transactions(&entry.transactions)
                     .into_iter()
                     .all(|x| x.is_ok())
             );
         }
-        assert_eq!(bank.get_balance(&alice.pubkey()), 1);
+        assert_eq!(transaction_processor.get_balance(&alice.pubkey()), 1);
     }
 }

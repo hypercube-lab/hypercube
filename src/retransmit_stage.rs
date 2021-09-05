@@ -1,7 +1,7 @@
 //! The `retransmit_stage` retransmits blobs between validators
 
 use counter::Counter;
-use crdt::Crdt;
+use blockthread::BlockThread;
 use entry::Entry;
 use log::Level;
 use result::{Error, Result};
@@ -22,33 +22,33 @@ pub enum RetransmitStageReturnType {
     LeaderRotation(u64),
 }
 
-fn retransmit(crdt: &Arc<RwLock<Crdt>>, r: &BlobReceiver, sock: &UdpSocket) -> Result<()> {
+fn retransmit(blockthread: &Arc<RwLock<BlockThread>>, r: &BlobReceiver, sock: &UdpSocket) -> Result<()> {
     let timer = Duration::new(1, 0);
     let mut dq = r.recv_timeout(timer)?;
     while let Ok(mut nq) = r.try_recv() {
         dq.append(&mut nq);
     }
     for b in &mut dq {
-        Crdt::retransmit(&crdt, b, sock)?;
+        BlockThread::retransmit(&blockthread, b, sock)?;
     }
     Ok(())
 }
 
 /// Service to retransmit messages from the leader to layer 1 nodes.
-/// See `crdt` for network layer definitions.
+/// See `blockthread` for network layer definitions.
 /// # Arguments
 /// * `sock` - Socket to read from.  Read timeout is set to 1.
 /// * `exit` - Boolean to signal system exit.
-/// * `crdt` - This structure needs to be updated and populated by the bank and via gossip.
+/// * `blockthread` - This structure needs to be updated and populated by the transaction_processor and via gossip.
 /// * `recycler` - Blob recycler.
 /// * `r` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
-fn retransmitter(sock: Arc<UdpSocket>, crdt: Arc<RwLock<Crdt>>, r: BlobReceiver) -> JoinHandle<()> {
+fn retransmitter(sock: Arc<UdpSocket>, blockthread: Arc<RwLock<BlockThread>>, r: BlobReceiver) -> JoinHandle<()> {
     Builder::new()
         .name("hypercube-retransmitter".to_string())
         .spawn(move || {
             trace!("retransmitter started");
             loop {
-                if let Err(e) = retransmit(&crdt, &r, &sock) {
+                if let Err(e) = retransmit(&blockthread, &r, &sock) {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
@@ -69,7 +69,7 @@ pub struct RetransmitStage {
 
 impl RetransmitStage {
     pub fn new(
-        crdt: &Arc<RwLock<Crdt>>,
+        blockthread: &Arc<RwLock<BlockThread>>,
         window: SharedWindow,
         entry_height: u64,
         retransmit_socket: Arc<UdpSocket>,
@@ -78,11 +78,11 @@ impl RetransmitStage {
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (retransmit_sender, retransmit_receiver) = channel();
 
-        let t_retransmit = retransmitter(retransmit_socket, crdt.clone(), retransmit_receiver);
+        let t_retransmit = retransmitter(retransmit_socket, blockthread.clone(), retransmit_receiver);
         let (entry_sender, entry_receiver) = channel();
         let done = Arc::new(AtomicBool::new(false));
         let t_window = window_service(
-            crdt.clone(),
+            blockthread.clone(),
             window,
             entry_height,
             0,

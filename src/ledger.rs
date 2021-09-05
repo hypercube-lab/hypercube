@@ -263,7 +263,7 @@ fn recover_ledger(ledger_path: &str) -> io::Result<()> {
 //   LedgerWindow needs "&mut self"
 //
 //impl Index<u64> for LedgerWindow {
-//    type Output = io::Result<Entry>;
+//    type Outx_creatort = io::Result<Entry>;
 //
 //    fn index(&mut self, index: u64) -> &io::Result<Entry> {
 //        match u64_at(&mut self.index, index * SIZEOF_U64) {
@@ -469,7 +469,7 @@ pub fn reconstruct_entries_from_blobs(blobs: Vec<SharedBlob>) -> Result<Vec<Entr
     Ok(entries)
 }
 
-/// Creates the next entries for given transactions, outputs
+/// Creates the next entries for given transactions, outx_creatorts
 /// updates start_hash to id of last Entry, sets num_hashes to 0
 pub fn next_entries_mut(
     start_hash: &mut Hash,

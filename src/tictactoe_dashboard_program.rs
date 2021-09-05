@@ -67,22 +67,22 @@ impl TicTacToeDashboardProgram {
         Ok(())
     }
 
-    fn serialize(self: &TicTacToeDashboardProgram, output: &mut [u8]) -> Result<()> {
+    fn serialize(self: &TicTacToeDashboardProgram, outx_creatort: &mut [u8]) -> Result<()> {
         let self_serialized = serde_cbor::to_vec(self).unwrap();
 
-        if output.len() < 2 + self_serialized.len() {
+        if outx_creatort.len() < 2 + self_serialized.len() {
             warn!(
                 "{} bytes required to serialize but only have {} bytes",
                 self_serialized.len() + 2,
-                output.len()
+                outx_creatort.len()
             );
             return Err(Error::UserdataTooSmall);
         }
 
         assert!(self_serialized.len() <= 0xFFFF);
-        output[0] = (self_serialized.len() & 0xFF) as u8;
-        output[1] = (self_serialized.len() >> 8) as u8;
-        output[2..(2 + self_serialized.len())].clone_from_slice(&self_serialized);
+        outx_creatort[0] = (self_serialized.len() & 0xFF) as u8;
+        outx_creatort[1] = (self_serialized.len() >> 8) as u8;
+        outx_creatort[2..(2 + self_serialized.len())].clone_from_slice(&self_serialized);
         Ok(())
     }
 

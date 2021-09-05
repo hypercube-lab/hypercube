@@ -51,7 +51,7 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
 
     let leader = poll_gossip_for_leader(network, timeout)?;
 
-    let mut drone_addr = leader.contact_info.tpu;
+    let mut drone_addr = leader.contact_info.tx_creator;
     drone_addr.set_port(DRONE_PORT);
 
     let rpc_addr = if let Some(proxy) = matches.value_of("proxy") {
@@ -62,7 +62,7 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
         } else {
             RPC_PORT
         };
-        let mut rpc_addr = leader.contact_info.tpu;
+        let mut rpc_addr = leader.contact_info.tx_creator;
         rpc_addr.set_port(rpc_port);
         format!("http://{}", rpc_addr.to_string())
     };

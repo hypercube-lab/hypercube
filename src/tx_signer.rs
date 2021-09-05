@@ -1,44 +1,6 @@
-//! The `tvu` module implements the Transaction Validation Unit, a
-//! 3-stage transaction validation pipeline in software.
-//!
-//! ```text
-//!      .------------------------------------------------.
-//!      |                                                |
-//!      |           .------------------------------------+------------.
-//!      |           |  TVU                               |            |
-//!      |           |                                    |            |
-//!      |           |                                    |            |  .------------.
-//!      |           |                   .----------------+-------------->| Validators |
-//!      v           |  .-------.        |                |            |  `------------`
-//! .----+---.       |  |       |   .----+-------.   .----+---------.  |
-//! | Leader |--------->| Blob  |   | Retransmit |   | Replicate    |  |
-//! `--------`       |  | Fetch |-->|   Stage    |-->| Stage /      |  |
-//! .------------.   |  | Stage |   |            |   | Vote Stage   |  |
-//! | Validators |----->|       |   `------------`   `----+---------`  |
-//! `------------`   |  `-------`                         |            |
-//!                  |                                    |            |
-//!                  |                                    |            |
-//!                  |                                    |            |
-//!                  `------------------------------------|------------`
-//!                                                       |
-//!                                                       v
-//!                                                    .------.
-//!                                                    | Bank |
-//!                                                    `------`
-//! ```
-//!
-//! 1. Fetch Stage
-//! - Incoming blobs are picked up from the replicate socket and repair socket.
-//! 2. SharedWindow Stage
-//! - Blobs are windowed until a contiguous chunk is available.  This stage also repairs and
-//! retransmits blobs that are in the queue.
-//! 3. Replicate Stage
-//! - Transactions in blobs are processed and applied to the bank.
-//! - TODO We need to verify the signatures in the blobs.
-
-use bank::Bank;
+use transaction_processor::TransactionProcessor;
 use blob_fetch_stage::BlobFetchStage;
-use crdt::Crdt;
+use blockthread::BlockThread;
 use replicate_stage::ReplicateStage;
 use retransmit_stage::{RetransmitStage, RetransmitStageReturnType};
 use service::Service;
@@ -50,24 +12,24 @@ use std::thread;
 use window::SharedWindow;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum TvuReturnType {
+pub enum TxSignerReturnType {
     LeaderRotation(u64),
 }
 
-pub struct Tvu {
+pub struct TxSigner {
     replicate_stage: ReplicateStage,
     fetch_stage: BlobFetchStage,
     retransmit_stage: RetransmitStage,
     exit: Arc<AtomicBool>,
 }
 
-impl Tvu {
+impl TxSigner {
     /// This service receives messages from a leader in the network and processes the transactions
-    /// on the bank state.
+    /// on the transaction_processor state.
     /// # Arguments
-    /// * `bank` - The bank state.
+    /// * `transaction_processor` - The transaction_processor state.
     /// * `entry_height` - Initial ledger height, passed to replicate stage
-    /// * `crdt` - The crdt state.
+    /// * `blockthread` - The blockthread state.
     /// * `window` - The window state.
     /// * `replicate_socket` - my replicate socket
     /// * `repair_socket` - my repair socket
@@ -76,9 +38,9 @@ impl Tvu {
     #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn new(
         keypair: Arc<Keypair>,
-        bank: &Arc<Bank>,
+        transaction_processor: &Arc<TransactionProcessor>,
         entry_height: u64,
-        crdt: Arc<RwLock<Crdt>>,
+        blockthread: Arc<RwLock<BlockThread>>,
         window: SharedWindow,
         replicate_sockets: Vec<UdpSocket>,
         repair_socket: UdpSocket,
@@ -97,7 +59,7 @@ impl Tvu {
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
         //then sent to the window, which does the erasure coding reconstruction
         let (retransmit_stage, blob_window_receiver) = RetransmitStage::new(
-            &crdt,
+            &blockthread,
             window,
             entry_height,
             Arc::new(retransmit_socket),
@@ -107,14 +69,14 @@ impl Tvu {
 
         let replicate_stage = ReplicateStage::new(
             keypair,
-            bank.clone(),
-            crdt,
+            transaction_processor.clone(),
+            blockthread,
             blob_window_receiver,
             ledger_path,
             exit.clone(),
         );
 
-        Tvu {
+        TxSigner {
             replicate_stage,
             fetch_stage,
             retransmit_stage,
@@ -126,21 +88,21 @@ impl Tvu {
         self.exit.store(true, Ordering::Relaxed);
     }
 
-    pub fn close(self) -> thread::Result<Option<TvuReturnType>> {
+    pub fn close(self) -> thread::Result<Option<TxSignerReturnType>> {
         self.fetch_stage.close();
         self.join()
     }
 }
 
-impl Service for Tvu {
-    type JoinReturnType = Option<TvuReturnType>;
+impl Service for TxSigner {
+    type JoinReturnType = Option<TxSignerReturnType>;
 
-    fn join(self) -> thread::Result<Option<TvuReturnType>> {
+    fn join(self) -> thread::Result<Option<TxSignerReturnType>> {
         self.replicate_stage.join()?;
         self.fetch_stage.join()?;
         match self.retransmit_stage.join()? {
             Some(RetransmitStageReturnType::LeaderRotation(entry_height)) => {
-                Ok(Some(TvuReturnType::LeaderRotation(entry_height)))
+                Ok(Some(TxSignerReturnType::LeaderRotation(entry_height)))
             }
             _ => Ok(None),
         }
@@ -149,9 +111,9 @@ impl Service for Tvu {
 
 #[cfg(test)]
 pub mod tests {
-    use bank::Bank;
+    use transaction_processor::TransactionProcessor;
     use bincode::serialize;
-    use crdt::{Crdt, Node};
+    use blockthread::{BlockThread, Node};
     use entry::Entry;
     use hash::{hash, Hash};
     use logger;
@@ -168,16 +130,16 @@ pub mod tests {
     use streamer;
     use builtin_tansaction::SystemTransaction;
     use transaction::Transaction;
-    use tvu::Tvu;
+    use tx_signer::TxSigner;
     use window::{self, SharedWindow};
 
     fn new_ncp(
-        crdt: Arc<RwLock<Crdt>>,
+        blockthread: Arc<RwLock<BlockThread>>,
         gossip: UdpSocket,
         exit: Arc<AtomicBool>,
     ) -> (Ncp, SharedWindow) {
         let window = Arc::new(RwLock::new(window::default_window()));
-        let ncp = Ncp::new(&crdt, window.clone(), None, gossip, exit);
+        let ncp = Ncp::new(&blockthread, window.clone(), None, gossip, exit);
         (ncp, window)
     }
 
@@ -191,19 +153,19 @@ pub mod tests {
         let target2 = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
 
-        //start crdt_leader
-        let mut crdt_l = Crdt::new(leader.info.clone()).expect("Crdt::new");
-        crdt_l.set_leader(leader.info.id);
+        //start blockthread_leader
+        let mut blockthread_l = BlockThread::new(leader.info.clone()).expect("BlockThread::new");
+        blockthread_l.set_leader(leader.info.id);
 
-        let cref_l = Arc::new(RwLock::new(crdt_l));
+        let cref_l = Arc::new(RwLock::new(blockthread_l));
         let dr_l = new_ncp(cref_l, leader.sockets.gossip, exit.clone());
 
-        //start crdt2
-        let mut crdt2 = Crdt::new(target2.info.clone()).expect("Crdt::new");
-        crdt2.insert(&leader.info);
-        crdt2.set_leader(leader.info.id);
+        //start blockthread2
+        let mut blockthread2 = BlockThread::new(target2.info.clone()).expect("BlockThread::new");
+        blockthread2.insert(&leader.info);
+        blockthread2.set_leader(leader.info.id);
         let leader_id = leader.info.id;
-        let cref2 = Arc::new(RwLock::new(crdt2));
+        let cref2 = Arc::new(RwLock::new(blockthread2));
         let dr_2 = new_ncp(cref2, target2.sockets.gossip, exit.clone());
 
         // setup some blob services to send blobs into the socket
@@ -229,19 +191,19 @@ pub mod tests {
 
         let starting_balance = 10_000;
         let mint = Mint::new(starting_balance);
-        let replicate_addr = target1.info.contact_info.tvu;
-        let bank = Arc::new(Bank::new(&mint));
+        let replicate_addr = target1.info.contact_info.tx_signer;
+        let transaction_processor = Arc::new(TransactionProcessor::new(&mint));
 
-        //start crdt1
-        let mut crdt1 = Crdt::new(target1.info.clone()).expect("Crdt::new");
-        crdt1.insert(&leader.info);
-        crdt1.set_leader(leader.info.id);
-        let cref1 = Arc::new(RwLock::new(crdt1));
+        //start blockthread1
+        let mut blockthread1 = BlockThread::new(target1.info.clone()).expect("BlockThread::new");
+        blockthread1.insert(&leader.info);
+        blockthread1.set_leader(leader.info.id);
+        let cref1 = Arc::new(RwLock::new(blockthread1));
         let dr_1 = new_ncp(cref1.clone(), target1.sockets.gossip, exit.clone());
 
-        let tvu = Tvu::new(
+        let tx_signer = TxSigner::new(
             Arc::new(target1_keypair),
-            &bank,
+            &transaction_processor,
             0,
             cref1,
             dr_1.1,
@@ -260,7 +222,7 @@ pub mod tests {
         let bob_keypair = Keypair::new();
         for i in 0..num_transfers {
             let entry0 = Entry::new(&cur_hash, i, vec![]);
-            bank.register_entry_id(&cur_hash);
+            transaction_processor.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash.as_ref());
 
             let tx0 = Transaction::system_new(
@@ -269,10 +231,10 @@ pub mod tests {
                 transfer_amount,
                 cur_hash,
             );
-            bank.register_entry_id(&cur_hash);
+            transaction_processor.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash.as_ref());
             let entry1 = Entry::new(&cur_hash, i + num_transfers, vec![tx0]);
-            bank.register_entry_id(&cur_hash);
+            transaction_processor.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash.as_ref());
 
             alice_ref_balance -= transfer_amount;
@@ -305,13 +267,13 @@ pub mod tests {
             trace!("got msg");
         }
 
-        let alice_balance = bank.get_balance(&mint.keypair().pubkey());
+        let alice_balance = transaction_processor.get_balance(&mint.keypair().pubkey());
         assert_eq!(alice_balance, alice_ref_balance);
 
-        let bob_balance = bank.get_balance(&bob_keypair.pubkey());
+        let bob_balance = transaction_processor.get_balance(&bob_keypair.pubkey());
         assert_eq!(bob_balance, starting_balance - alice_ref_balance);
 
-        tvu.close().expect("close");
+        tx_signer.close().expect("close");
         exit.store(true, Ordering::Relaxed);
         dr_l.0.join().expect("join");
         dr_2.0.join().expect("join");

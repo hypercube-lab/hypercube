@@ -1,4 +1,0 @@
-steps:
-  - command: "ci/snap.sh"
-    timeout_in_minutes: 40
-    name: "snap [public]"

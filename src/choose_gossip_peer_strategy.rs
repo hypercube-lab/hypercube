@@ -1,4 +1,4 @@
-use crdt::{CrdtError, NodeInfo};
+use blockthread::{BlockThreadError, NodeInfo};
 use rand::distributions::{Distribution, Weighted, WeightedChoice};
 use rand::thread_rng;
 use result::Result;
@@ -29,7 +29,7 @@ impl<'a, 'b> ChooseRandomPeerStrategy<'a> {
 impl<'a> ChooseGossipPeerStrategy for ChooseRandomPeerStrategy<'a> {
     fn choose_peer<'b>(&self, options: Vec<&'b NodeInfo>) -> Result<&'b NodeInfo> {
         if options.is_empty() {
-            Err(CrdtError::NoPeers)?;
+            Err(BlockThreadError::NoPeers)?;
         }
 
         let n = ((self.random)() as usize) % options.len();
@@ -87,8 +87,8 @@ impl<'a> ChooseWeightedPeerStrategy<'a> {
     fn calculate_weighted_remote_index(&self, peer_id: Pubkey) -> u32 {
         let mut last_seen_index = 0;
         // If the peer is not in our remote table, then we leave last_seen_index as zero.
-        // Only happens when a peer appears in our crdt.table but not in our crdt.remote,
-        // which means a validator was directly injected into our crdt.table
+        // Only happens when a peer appears in our blockthread.table but not in our blockthread.remote,
+        // which means a validator was directly injected into our blockthread.table
         if let Some(index) = self.remote.get(&peer_id) {
             last_seen_index = *index;
         }
@@ -174,7 +174,7 @@ impl<'a> ChooseWeightedPeerStrategy<'a> {
 impl<'a> ChooseGossipPeerStrategy for ChooseWeightedPeerStrategy<'a> {
     fn choose_peer<'b>(&self, options: Vec<&'b NodeInfo>) -> Result<&'b NodeInfo> {
         if options.is_empty() {
-            Err(CrdtError::NoPeers)?;
+            Err(BlockThreadError::NoPeers)?;
         }
 
         let mut weighted_peers = vec![];

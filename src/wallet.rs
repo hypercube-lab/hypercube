@@ -4,7 +4,7 @@ use fin_plan_program::BudgetState;
 use fin_plan_transaction::BudgetTransaction;
 use chrono::prelude::*;
 use clap::ArgMatches;
-use crdt::NodeInfo;
+use blockthread::NodeInfo;
 use drone::DroneRequest;
 use fullnode::Config;
 use hash::Hash;
@@ -665,9 +665,9 @@ fn serialize_and_send_tx(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bank::Bank;
+    use transaction_processor::TransactionProcessor;
     use clap::{App, Arg, SubCommand};
-    use crdt::Node;
+    use blockthread::Node;
     use drone::run_local_drone;
     use fullnode::Fullnode;
     use ledger::LedgerWriter;
@@ -985,7 +985,7 @@ mod tests {
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         let alice = Mint::new(10_000_000);
-        let bank = Bank::new(&alice);
+        let transaction_processor = TransactionProcessor::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
@@ -994,9 +994,9 @@ mod tests {
         let mut config = WalletConfig::default();
         let rpc_port = 12345; // Needs to be distinct known number to not conflict with other tests
 
-        let server = Fullnode::new_with_bank(
+        let server = Fullnode::new_with_transaction_processor(
             leader_keypair,
-            bank,
+            transaction_processor,
             0,
             &[],
             leader,
@@ -1062,16 +1062,16 @@ mod tests {
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         let alice = Mint::new(10_000_000);
-        let bank = Bank::new(&alice);
+        let transaction_processor = TransactionProcessor::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
         let ledger_path = tmp_ledger("wallet_request_airdrop", &alice);
 
         let rpc_port = 11111; // Needs to be distinct known number to not conflict with other tests
 
-        let server = Fullnode::new_with_bank(
+        let server = Fullnode::new_with_transaction_processor(
             leader_keypair,
-            bank,
+            transaction_processor,
             0,
             &[],
             leader,
@@ -1126,7 +1126,7 @@ mod tests {
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         let alice = Mint::new(10_000_000);
-        let bank = Bank::new(&alice);
+        let transaction_processor = TransactionProcessor::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
@@ -1137,9 +1137,9 @@ mod tests {
         let mut config_witness = WalletConfig::default();
         let rpc_port = 13579; // Needs to be distinct known number to not conflict with other tests
 
-        let server = Fullnode::new_with_bank(
+        let server = Fullnode::new_with_transaction_processor(
             leader_keypair,
-            bank,
+            transaction_processor,
             0,
             &[],
             leader,
@@ -1247,7 +1247,7 @@ mod tests {
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         let alice = Mint::new(10_000_000);
-        let bank = Bank::new(&alice);
+        let transaction_processor = TransactionProcessor::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
@@ -1258,9 +1258,9 @@ mod tests {
         let mut config_witness = WalletConfig::default();
         let rpc_port = 11223; // Needs to be distinct known number to not conflict with other tests
 
-        let server = Fullnode::new_with_bank(
+        let server = Fullnode::new_with_transaction_processor(
             leader_keypair,
-            bank,
+            transaction_processor,
             0,
             &[],
             leader,
@@ -1366,7 +1366,7 @@ mod tests {
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         let alice = Mint::new(10_000_000);
-        let bank = Bank::new(&alice);
+        let transaction_processor = TransactionProcessor::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
@@ -1377,9 +1377,9 @@ mod tests {
         let mut config_witness = WalletConfig::default();
         let rpc_port = 13456; // Needs to be distinct known number to not conflict with other tests
 
-        let server = Fullnode::new_with_bank(
+        let server = Fullnode::new_with_transaction_processor(
             leader_keypair,
-            bank,
+            transaction_processor,
             0,
             &[],
             leader,

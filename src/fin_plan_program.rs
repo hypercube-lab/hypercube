@@ -194,23 +194,23 @@ impl BudgetState {
             }
         }
     }
-    fn serialize(&self, output: &mut [u8]) -> Result<(), BudgetError> {
+    fn serialize(&self, outx_creatort: &mut [u8]) -> Result<(), BudgetError> {
         let len = serialized_size(self).unwrap() as u64;
-        if output.len() < len as usize {
+        if outx_creatort.len() < len as usize {
             warn!(
                 "{} bytes required to serialize, only have {} bytes",
                 len,
-                output.len()
+                outx_creatort.len()
             );
             return Err(BudgetError::UserdataTooSmall);
         }
         {
-            let writer = io::BufWriter::new(&mut output[..8]);
+            let writer = io::BufWriter::new(&mut outx_creatort[..8]);
             serialize_into(writer, &len).unwrap();
         }
 
         {
-            let writer = io::BufWriter::new(&mut output[8..8 + len as usize]);
+            let writer = io::BufWriter::new(&mut outx_creatort[8..8 + len as usize]);
             serialize_into(writer, self).unwrap();
         }
         Ok(())

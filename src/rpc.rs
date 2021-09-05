@@ -1,6 +1,6 @@
 //! The `rpc` module implements the HyperCube RPC interface.
 
-use bank::{Bank, BankError};
+use transaction_processor::{TransactionProcessor, TransactionProcessorError};
 use bincode::deserialize;
 use bs58;
 use jsonrpc_core::*;
@@ -28,13 +28,13 @@ pub struct JsonRpcService {
 
 impl JsonRpcService {
     pub fn new(
-        bank: &Arc<Bank>,
+        transaction_processor: &Arc<TransactionProcessor>,
         transactions_addr: SocketAddr,
         drone_addr: SocketAddr,
         rpc_addr: SocketAddr,
         exit: Arc<AtomicBool>,
     ) -> Self {
-        let request_processor = JsonRpcRequestProcessor::new(bank.clone());
+        let request_processor = JsonRpcRequestProcessor::new(transaction_processor.clone());
         let thread_hdl = Builder::new()
             .name("hypercube-jsonrpc".to_string())
             .spawn(move || {
@@ -173,8 +173,8 @@ impl RpcXpz for RpcXpzImpl {
         Ok(
             match meta.request_processor.get_signature_status(signature) {
                 Ok(_) => RpcSignatureStatus::Confirmed,
-                Err(BankError::ProgramRuntimeError) => RpcSignatureStatus::ProgramRuntimeError,
-                Err(BankError::SignatureNotFound) => RpcSignatureStatus::SignatureNotFound,
+                Err(TransactionProcessorError::ProgramRuntimeError) => RpcSignatureStatus::ProgramRuntimeError,
+                Err(TransactionProcessorError::SignatureNotFound) => RpcSignatureStatus::SignatureNotFound,
                 Err(err) => {
                     trace!("mapping {:?} to GenericFailure", err);
                     RpcSignatureStatus::GenericFailure
@@ -225,43 +225,43 @@ impl RpcXpz for RpcXpzImpl {
 }
 #[derive(Clone)]
 pub struct JsonRpcRequestProcessor {
-    bank: Arc<Bank>,
+    transaction_processor: Arc<TransactionProcessor>,
 }
 impl JsonRpcRequestProcessor {
-    /// Create a new request processor that wraps the given Bank.
-    pub fn new(bank: Arc<Bank>) -> Self {
-        JsonRpcRequestProcessor { bank }
+    /// Create a new request processor that wraps the given TransactionProcessor.
+    pub fn new(transaction_processor: Arc<TransactionProcessor>) -> Self {
+        JsonRpcRequestProcessor { transaction_processor }
     }
 
     /// Process JSON-RPC request items sent via JSON-RPC.
     fn get_account_info(&self, pubkey: Pubkey) -> Result<Account> {
-        self.bank
+        self.transaction_processor
             .get_account(&pubkey)
             .ok_or_else(Error::invalid_request)
     }
     fn get_balance(&self, pubkey: Pubkey) -> Result<i64> {
-        let val = self.bank.get_balance(&pubkey);
+        let val = self.transaction_processor.get_balance(&pubkey);
         Ok(val)
     }
     fn get_finality(&self) -> Result<usize> {
-        Ok(self.bank.finality())
+        Ok(self.transaction_processor.finality())
     }
     fn get_last_id(&self) -> Result<String> {
-        let id = self.bank.last_id();
+        let id = self.transaction_processor.last_id();
         Ok(bs58::encode(id).into_string())
     }
-    fn get_signature_status(&self, signature: Signature) -> result::Result<(), BankError> {
-        self.bank.get_signature_status(&signature)
+    fn get_signature_status(&self, signature: Signature) -> result::Result<(), TransactionProcessorError> {
+        self.transaction_processor.get_signature_status(&signature)
     }
     fn get_transaction_count(&self) -> Result<u64> {
-        Ok(self.bank.transaction_count() as u64)
+        Ok(self.transaction_processor.transaction_count() as u64)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bank::Bank;
+    use transaction_processor::TransactionProcessor;
     use jsonrpc_core::Response;
     use mint::Mint;
     use signature::{Keypair, KeypairUtil};
@@ -274,13 +274,13 @@ mod tests {
     fn test_rpc_request() {
         let alice = Mint::new(10_000);
         let bob_pubkey = Keypair::new().pubkey();
-        let bank = Bank::new(&alice);
+        let transaction_processor = TransactionProcessor::new(&alice);
 
-        let last_id = bank.last_id();
+        let last_id = transaction_processor.last_id();
         let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 20, last_id, 0);
-        bank.process_transaction(&tx).expect("process transaction");
+        transaction_processor.process_transaction(&tx).expect("process transaction");
 
-        let request_processor = JsonRpcRequestProcessor::new(Arc::new(bank));
+        let request_processor = JsonRpcRequestProcessor::new(Arc::new(transaction_processor));
         let transactions_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let drone_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
 
@@ -341,14 +341,14 @@ mod tests {
     #[test]
     fn test_rpc_request_bad_parameter_type() {
         let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let transaction_processor = TransactionProcessor::new(&alice);
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcXpzImpl;
         io.extend_with(rpc.to_delegate());
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"confirmTransaction","params":[1234567890]}"#;
         let meta = Meta {
-            request_processor: JsonRpcRequestProcessor::new(Arc::new(bank)),
+            request_processor: JsonRpcRequestProcessor::new(Arc::new(transaction_processor)),
             transactions_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             drone_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
         };
@@ -365,7 +365,7 @@ mod tests {
     #[test]
     fn test_rpc_request_bad_signature() {
         let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let transaction_processor = TransactionProcessor::new(&alice);
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcXpzImpl;
@@ -373,7 +373,7 @@ mod tests {
         let req =
             r#"{"jsonrpc":"2.0","id":1,"method":"confirmTransaction","params":["a1b2c3d4e5"]}"#;
         let meta = Meta {
-            request_processor: JsonRpcRequestProcessor::new(Arc::new(bank)),
+            request_processor: JsonRpcRequestProcessor::new(Arc::new(transaction_processor)),
             transactions_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             drone_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
         };

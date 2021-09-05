@@ -1,10 +1,10 @@
-//! The `vote_stage` votes on the `last_id` of the bank at a regular cadence
+//! The `vote_stage` votes on the `last_id` of the transaction_processor at a regular cadence
 
-use bank::Bank;
+use transaction_processor::TransactionProcessor;
 use bincode::serialize;
 use fin_plan_transaction::BudgetTransaction;
 use counter::Counter;
-use crdt::Crdt;
+use blockthread::BlockThread;
 use hash::Hash;
 use influx_db_client as influxdb;
 use log::Level;
@@ -30,14 +30,14 @@ enum VoteError {
 pub fn create_new_signed_vote_blob(
     last_id: &Hash,
     keypair: &Keypair,
-    crdt: &Arc<RwLock<Crdt>>,
+    blockthread: &Arc<RwLock<BlockThread>>,
 ) -> Result<SharedBlob> {
     let shared_blob = SharedBlob::default();
     let (vote, addr) = {
-        let mut wcrdt = crdt.write().unwrap();
+        let mut wblockthread = blockthread.write().unwrap();
         //TODO: doesn't seem like there is a synchronous call to get height and id
         debug!("voting on {:?}", &last_id.as_ref()[..8]);
-        wcrdt.new_vote(*last_id)
+        wblockthread.new_vote(*last_id)
     }?;
     let tx = Transaction::fin_plan_new_vote(&keypair, vote, *last_id, 0);
     {
@@ -54,12 +54,12 @@ pub fn create_new_signed_vote_blob(
 fn get_last_id_to_vote_on(
     id: &Pubkey,
     ids: &[Hash],
-    bank: &Arc<Bank>,
+    transaction_processor: &Arc<TransactionProcessor>,
     now: u64,
     last_vote: &mut u64,
     last_valid_validator_timestamp: &mut u64,
 ) -> result::Result<(Hash, u64), VoteError> {
-    let mut valid_ids = bank.count_valid_ids(&ids);
+    let mut valid_ids = transaction_processor.count_valid_ids(&ids);
     let super_majority_index = (2 * ids.len()) / 3;
 
     //TODO(anatoly): this isn't stake based voting
@@ -106,24 +106,24 @@ fn get_last_id_to_vote_on(
 pub fn send_leader_vote(
     id: &Pubkey,
     keypair: &Keypair,
-    bank: &Arc<Bank>,
-    crdt: &Arc<RwLock<Crdt>>,
+    transaction_processor: &Arc<TransactionProcessor>,
+    blockthread: &Arc<RwLock<BlockThread>>,
     vote_blob_sender: &BlobSender,
     last_vote: &mut u64,
     last_valid_validator_timestamp: &mut u64,
 ) -> Result<()> {
     let now = timing::timestamp();
     if now - *last_vote > VOTE_TIMEOUT_MS {
-        let ids: Vec<_> = crdt.read().unwrap().valid_last_ids();
+        let ids: Vec<_> = blockthread.read().unwrap().valid_last_ids();
         if let Ok((last_id, super_majority_timestamp)) = get_last_id_to_vote_on(
             id,
             &ids,
-            bank,
+            transaction_processor,
             now,
             last_vote,
             last_valid_validator_timestamp,
         ) {
-            if let Ok(shared_blob) = create_new_signed_vote_blob(&last_id, keypair, crdt) {
+            if let Ok(shared_blob) = create_new_signed_vote_blob(&last_id, keypair, blockthread) {
                 vote_blob_sender.send(vec![shared_blob])?;
                 let finality_ms = now - super_majority_timestamp;
 
@@ -131,7 +131,7 @@ pub fn send_leader_vote(
                 debug!("{} leader_sent_vote finality: {} ms", id, finality_ms);
                 inc_new_counter_info!("vote_stage-leader_sent_vote", 1);
 
-                bank.set_finality((now - *last_valid_validator_timestamp) as usize);
+                transaction_processor.set_finality((now - *last_valid_validator_timestamp) as usize);
 
                 metrics::submit(
                     influxdb::Point::new(&"leader-finality")
@@ -145,13 +145,13 @@ pub fn send_leader_vote(
 }
 
 pub fn send_validator_vote(
-    bank: &Arc<Bank>,
+    transaction_processor: &Arc<TransactionProcessor>,
     keypair: &Arc<Keypair>,
-    crdt: &Arc<RwLock<Crdt>>,
+    blockthread: &Arc<RwLock<BlockThread>>,
     vote_blob_sender: &BlobSender,
 ) -> Result<()> {
-    let last_id = bank.last_id();
-    if let Ok(shared_blob) = create_new_signed_vote_blob(&last_id, keypair, crdt) {
+    let last_id = transaction_processor.last_id();
+    if let Ok(shared_blob) = create_new_signed_vote_blob(&last_id, keypair, blockthread) {
         inc_new_counter_info!("replicate-vote_sent", 1);
 
         vote_blob_sender.send(vec![shared_blob])?;
@@ -162,10 +162,10 @@ pub fn send_validator_vote(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use bank::Bank;
+    use transaction_processor::TransactionProcessor;
     use bincode::deserialize;
     use fin_plan_instruction::Vote;
-    use crdt::{Crdt, NodeInfo};
+    use blockthread::{BlockThread, NodeInfo};
     use entry::next_entry;
     use hash::{hash, Hash};
     use logger;
@@ -181,26 +181,26 @@ pub mod tests {
     fn test_send_leader_vote() {
         logger::setup();
 
-        // create a mint/bank
+        // create a mint/transaction_processor
         let mint = Mint::new(1000);
-        let bank = Arc::new(Bank::new(&mint));
+        let transaction_processor = Arc::new(TransactionProcessor::new(&mint));
         let hash0 = Hash::default();
 
         // get a non-default hash last_id
         let entry = next_entry(&hash0, 1, vec![]);
-        bank.register_entry_id(&entry.id);
+        transaction_processor.register_entry_id(&entry.id);
 
         // Create a leader
         let leader_data = NodeInfo::new_with_socketaddr(&"127.0.0.1:1234".parse().unwrap());
         let leader_pubkey = leader_data.id.clone();
-        let mut leader_crdt = Crdt::new(leader_data).unwrap();
+        let mut leader_blockthread = BlockThread::new(leader_data).unwrap();
 
         // give the leader some tokens
         let give_leader_tokens_tx =
             Transaction::system_new(&mint.keypair(), leader_pubkey.clone(), 100, entry.id);
-        bank.process_transaction(&give_leader_tokens_tx).unwrap();
+        transaction_processor.process_transaction(&give_leader_tokens_tx).unwrap();
 
-        leader_crdt.set_leader(leader_pubkey);
+        leader_blockthread.set_leader(leader_pubkey);
 
         // Insert 7 agreeing validators / 3 disagreeing
         // and votes for new last_id
@@ -217,19 +217,19 @@ pub mod tests {
                 validator.ledger_state.last_id = entry.id;
             }
 
-            leader_crdt.insert(&validator);
+            leader_blockthread.insert(&validator);
             trace!("validator id: {:?}", validator.id);
 
-            leader_crdt.insert_vote(&validator.id, &vote, entry.id);
+            leader_blockthread.insert_vote(&validator.id, &vote, entry.id);
         }
-        let leader = Arc::new(RwLock::new(leader_crdt));
+        let leader = Arc::new(RwLock::new(leader_blockthread));
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let mut last_vote: u64 = timing::timestamp() - VOTE_TIMEOUT_MS - 1;
         let mut last_valid_validator_timestamp = 0;
         let res = send_leader_vote(
             &mint.pubkey(),
             &mint.keypair(),
-            &bank,
+            &transaction_processor,
             &leader,
             &vote_blob_sender,
             &mut last_vote,
@@ -268,7 +268,7 @@ pub mod tests {
         let res = send_leader_vote(
             &Pubkey::default(),
             &mint.keypair(),
-            &bank,
+            &transaction_processor,
             &leader,
             &vote_blob_sender,
             &mut last_vote,
@@ -285,7 +285,7 @@ pub mod tests {
         // vote should be valid
         let blob = &vote_blob.unwrap()[0];
         let tx = deserialize(&(blob.read().unwrap().data)).unwrap();
-        assert!(bank.process_transaction(&tx).is_ok());
+        assert!(transaction_processor.process_transaction(&tx).is_ok());
     }
 
     #[test]
@@ -293,18 +293,18 @@ pub mod tests {
         logger::setup();
 
         let mint = Mint::new(1234);
-        let bank = Arc::new(Bank::new(&mint));
+        let transaction_processor = Arc::new(TransactionProcessor::new(&mint));
         let mut last_vote = 0;
         let mut last_valid_validator_timestamp = 0;
 
-        // generate 10 last_ids, register 6 with the bank
+        // generate 10 last_ids, register 6 with the transaction_processor
         let ids: Vec<_> = (0..10)
             .map(|i| {
                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
                 if i < 6 {
-                    bank.register_entry_id(&last_id);
+                    transaction_processor.register_entry_id(&last_id);
                 }
-                // sleep to get a different timestamp in the bank
+                // sleep to get a different timestamp in the transaction_processor
                 sleep(Duration::from_millis(1));
                 last_id
             }).collect();
@@ -314,7 +314,7 @@ pub mod tests {
             get_last_id_to_vote_on(
                 &Pubkey::default(),
                 &ids,
-                &bank,
+                &transaction_processor,
                 0,
                 &mut last_vote,
                 &mut last_valid_validator_timestamp
@@ -322,12 +322,12 @@ pub mod tests {
         );
 
         // register another, see passing
-        bank.register_entry_id(&ids[6]);
+        transaction_processor.register_entry_id(&ids[6]);
 
         let res = get_last_id_to_vote_on(
             &Pubkey::default(),
             &ids,
-            &bank,
+            &transaction_processor,
             0,
             &mut last_vote,
             &mut last_valid_validator_timestamp,

@@ -1,5 +1,5 @@
 //! The `sigverify_stage` implements the signature verification stage of the TPU. It
-//! receives a list of lists of packets and outputs the same list, but tags each
+//! receives a list of lists of packets and outx_creatorts the same list, but tags each
 //! top-level list with a list of booleans, telling the next stage whether the
 //! signature in that packet is valid. It assumes each packet contains one
 //! transaction. All processing is done on the CPU by default and on a GPU
@@ -76,7 +76,7 @@ impl SigVerifyStage {
 
         if sendr
             .lock()
-            .expect("lock in fn verify_batch in tpu")
+            .expect("lock in fn verify_batch in tx_creator")
             .send(verified_batch)
             .is_err()
         {

@@ -213,21 +213,21 @@ impl TicTacToeProgram {
         }
     }
 
-    fn serialize(self: &TicTacToeProgram, output: &mut [u8]) -> Result<()> {
+    fn serialize(self: &TicTacToeProgram, outx_creatort: &mut [u8]) -> Result<()> {
         let self_serialized = serde_cbor::to_vec(self).unwrap();
 
-        if output.len() + 1 < self_serialized.len() {
+        if outx_creatort.len() + 1 < self_serialized.len() {
             warn!(
                 "{} bytes required to serialize but only have {} bytes",
                 self_serialized.len(),
-                output.len() + 1
+                outx_creatort.len() + 1
             );
             return Err(Error::UserdataTooSmall);
         }
 
         assert!(self_serialized.len() <= 255);
-        output[0] = self_serialized.len() as u8;
-        output[1..=self_serialized.len()].clone_from_slice(&self_serialized);
+        outx_creatort[0] = self_serialized.len() as u8;
+        outx_creatort[1..=self_serialized.len()].clone_from_slice(&self_serialized);
         Ok(())
     }
 

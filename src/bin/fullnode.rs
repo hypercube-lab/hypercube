@@ -9,7 +9,7 @@ extern crate hypercube;
 
 use clap::{App, Arg};
 use hypercube::client::mk_client;
-use hypercube::crdt::Node;
+use hypercube::blockthread::Node;
 use hypercube::drone::DRONE_PORT;
 use hypercube::fullnode::{Config, Fullnode, FullnodeReturnType};
 use hypercube::logger;
@@ -128,7 +128,7 @@ fn main() -> () {
         match status {
             Ok(Some(FullnodeReturnType::LeaderRotation)) => (),
             _ => {
-                // Fullnode tpu/tvu exited for some unexpected
+                // Fullnode tx_creator/tx_signer exited for some unexpected
                 // reason, so exit
                 exit(1);
             }

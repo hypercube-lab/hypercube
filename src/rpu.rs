@@ -1,29 +1,4 @@
-//! The `rpu` module implements the Request Processing Unit, a
-//! 3-stage transaction processing pipeline in software. It listens
-//! for `Request` messages from clients and replies with `Response`
-//! messages.
-//!
-//! ```text
-//!                             .------.
-//!                             | Bank |
-//!                             `---+--`
-//!                                 |
-//!              .------------------|-------------------.
-//!              |  RPU             |                   |
-//!              |                  v                   |
-//!  .---------. |  .-------.  .---------.  .---------. |   .---------.
-//!  |  Alice  |--->|       |  |         |  |         +---->|  Alice  |
-//!  `---------` |  | Fetch |  | Request |  | Respond | |   `---------`
-//!              |  | Stage |->|  Stage  |->|  Stage  | |
-//!  .---------. |  |       |  |         |  |         | |   .---------.
-//!  |   Bob   |--->|       |  |         |  |         +---->|   Bob   |
-//!  `---------` |  `-------`  `---------`  `---------` |   `---------`
-//!              |                                      |
-//!              |                                      |
-//!              `--------------------------------------`
-//! ```
-
-use bank::Bank;
+use transaction_processor::TransactionProcessor;
 use request_processor::RequestProcessor;
 use request_stage::RequestStage;
 use service::Service;
@@ -41,7 +16,7 @@ pub struct Rpu {
 }
 
 impl Rpu {
-    pub fn new(bank: &Arc<Bank>, requests_socket: UdpSocket, respond_socket: UdpSocket) -> Self {
+    pub fn new(transaction_processor: &Arc<TransactionProcessor>, requests_socket: UdpSocket, respond_socket: UdpSocket) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
         let (packet_sender, packet_receiver) = channel();
         let t_receiver = streamer::receiver(
@@ -51,7 +26,7 @@ impl Rpu {
             "rpu",
         );
 
-        let request_processor = RequestProcessor::new(bank.clone());
+        let request_processor = RequestProcessor::new(transaction_processor.clone());
         let (request_stage, blob_receiver) = RequestStage::new(request_processor, packet_receiver);
 
         let t_responder = streamer::responder("rpu", Arc::new(respond_socket), blob_receiver);

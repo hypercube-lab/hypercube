@@ -11,7 +11,7 @@ use clap::{App, Arg};
 use influx_db_client as influxdb;
 use rayon::prelude::*;
 use hypercube::client::mk_client;
-use hypercube::crdt::{Crdt, NodeInfo};
+use hypercube::blockthread::{BlockThread, NodeInfo};
 use hypercube::drone::DRONE_PORT;
 use hypercube::hash::Hash;
 use hypercube::logger;
@@ -63,7 +63,7 @@ fn sample_tx_count(
     let mut max_tps = 0.0;
     let mut total;
 
-    let log_prefix = format!("{:21}:", v.contact_info.tpu.to_string());
+    let log_prefix = format!("{:21}:", v.contact_info.tx_creator.to_string());
 
     loop {
         let tx_count = client.transaction_count();
@@ -100,7 +100,7 @@ fn sample_tx_count(
                 tps: max_tps,
                 tx: total,
             };
-            maxes.write().unwrap().push((v.contact_info.tpu, stats));
+            maxes.write().unwrap().push((v.contact_info.tx_creator, stats));
             break;
         }
     }
@@ -242,7 +242,7 @@ fn do_tx_transfers(
             println!(
                 "Transferring 1 unit {} times... to {}",
                 txs0.len(),
-                leader.contact_info.tpu
+                leader.contact_info.tx_creator
             );
             let tx_len = txs0.len();
             let transfer_start = Instant::now();
@@ -273,7 +273,7 @@ fn do_tx_transfers(
 }
 
 fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_count: i64) {
-    let mut drone_addr = leader.contact_info.tpu;
+    let mut drone_addr = leader.contact_info.tx_creator;
     drone_addr.set_port(DRONE_PORT);
 
     let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap_or(0);
@@ -679,7 +679,7 @@ fn main() {
         total_tx_sent_count.load(Ordering::Relaxed),
     );
 
-    // join the crdt client threads
+    // join the blockthread client threads
     ncp.join().unwrap();
 }
 
@@ -689,11 +689,11 @@ fn converge(
     num_nodes: usize,
 ) -> (Vec<NodeInfo>, Option<NodeInfo>, Ncp) {
     //lets spy on the network
-    let (node, gossip_socket) = Crdt::spy_node();
-    let mut spy_crdt = Crdt::new(node).expect("Crdt::new");
-    spy_crdt.insert(&leader);
-    spy_crdt.set_leader(leader.id);
-    let spy_ref = Arc::new(RwLock::new(spy_crdt));
+    let (node, gossip_socket) = BlockThread::spy_node();
+    let mut spy_blockthread = BlockThread::new(node).expect("BlockThread::new");
+    spy_blockthread.insert(&leader);
+    spy_blockthread.set_leader(leader.id);
+    let spy_ref = Arc::new(RwLock::new(spy_blockthread));
     let window = Arc::new(RwLock::new(default_window()));
     let ncp = Ncp::new(&spy_ref, window, None, gossip_socket, exit_signal.clone());
     let mut v: Vec<NodeInfo> = vec![];
@@ -708,7 +708,7 @@ fn converge(
                 v = spy_ref
                     .table
                     .values()
-                    .filter(|x| Crdt::is_valid_address(&x.contact_info.rpu))
+                    .filter(|x| BlockThread::is_valid_address(&x.contact_info.rpu))
                     .cloned()
                     .collect();
 

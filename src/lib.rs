@@ -9,8 +9,8 @@
 #![cfg_attr(feature = "unstable", feature(test))]
 #[macro_use]
 pub mod counter;
-pub mod bank;
-pub mod banking_stage;
+pub mod transaction_processor;
+pub mod transaction_processoring_stage;
 pub mod blob_fetch_stage;
 pub mod broadcast_stage;
 pub mod fin_plan;
@@ -19,7 +19,7 @@ pub mod fin_plan_transaction;
 pub mod choose_gossip_peer_strategy;
 pub mod client;
 #[macro_use]
-pub mod crdt;
+pub mod blockthread;
 pub mod fin_plan_program;
 pub mod drone;
 pub mod dynamic_program;
@@ -38,8 +38,8 @@ pub mod ncp;
 pub mod netutil;
 pub mod packet;
 pub mod trx_out;
-pub mod poh;
-pub mod poh_recorder;
+pub mod pod;
+pub mod pod_recorder;
 pub mod recvmmsg;
 pub mod replicate_stage;
 pub mod replicator;
@@ -63,9 +63,9 @@ pub mod thin_client;
 pub mod tictactoe_dashboard_program;
 pub mod tictactoe_program;
 pub mod timing;
-pub mod tpu;
+pub mod tx_creator;
 pub mod transaction;
-pub mod tvu;
+pub mod tx_signer;
 pub mod vote_stage;
 pub mod wallet;
 pub mod window;
