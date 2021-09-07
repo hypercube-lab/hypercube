@@ -18,6 +18,8 @@ HyperCube is a free and open source blockchain project for everyone to use.
 
 [HyperCube Wiki](https://github.com/hypercube-lab/hypercube/wiki)
 
+[HyperCube Whitepaper](https://github.com/hypercube-lab/hypercube/blob/main/HyperCube.pdf)
+
 ## Wha is HyperCube
 
 HyperCube is an Ethereum 2-layer solution based on proof of POD dedication and an independent public chain.
