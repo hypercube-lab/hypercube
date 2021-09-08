@@ -2,7 +2,7 @@
 
 use transaction_processor::TransactionProcessor;
 use bincode::serialize;
-use fin_plan_transaction::BudgetTransaction;
+use fin_plan_transaction::FinPlanTransaction;
 use counter::Counter;
 use blockthread::BlockThread;
 use hash::Hash;

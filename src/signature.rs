@@ -1,4 +1,4 @@
-//! The `signature` module provides functionality for public, and private keys.
+ 
 
 use bs58;
 use generic_array::typenum::U64;
@@ -55,14 +55,14 @@ pub trait KeypairUtil {
 }
 
 impl KeypairUtil for Ed25519KeyPair {
-    /// Return a new ED25519 keypair
+     
     fn new() -> Self {
         let rng = rand::SystemRandom::new();
         let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&rng).expect("generate_pkcs8");
         Ed25519KeyPair::from_pkcs8(Input::from(&pkcs8_bytes)).expect("from_pcks8")
     }
 
-    /// Return the public key for the given keypair
+   
     fn pubkey(&self) -> Pubkey {
         Pubkey::new(self.public_key_bytes())
     }

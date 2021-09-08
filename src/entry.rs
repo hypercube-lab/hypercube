@@ -1,9 +1,9 @@
-//! The `entry` module is a fundamental building block of Proof of History. It contains a
+//! The `entry` module is a fundamental building block of Proof of Dedication. It contains a
 //! unique ID that is the hash of the Entry before it, plus the hash of the
 //! transactions within it. Entries cannot be reordered, and its field `num_hashes`
 //! represents an approximate amount of time since the last Entry was created.
 use bincode::{serialize_into, serialized_size};
-use fin_plan_transaction::BudgetTransaction;
+use fin_plan_transaction::FinPlanTransaction;
 use hash::Hash;
 use packet::{SharedBlob, BLOB_DATA_SIZE};
 use pod::Pod;
@@ -226,7 +226,7 @@ pub fn next_entry(start_hash: &Hash, num_hashes: u64, transactions: Vec<Transact
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fin_plan_transaction::BudgetTransaction;
+    use fin_plan_transaction::FinPlanTransaction;
     use chrono::prelude::*;
     use entry::Entry;
     use hash::hash;

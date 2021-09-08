@@ -1,4 +1,4 @@
-//! The `request_processor` processes thin client Request messages.
+ 
 
 use transaction_processor::TransactionProcessor;
 use request::{Request, Response};
@@ -10,12 +10,12 @@ pub struct RequestProcessor {
 }
 
 impl RequestProcessor {
-    /// Create a new TxCreator that wraps the given TransactionProcessor.
+   
     pub fn new(transaction_processor: Arc<TransactionProcessor>) -> Self {
         RequestProcessor { transaction_processor }
     }
 
-    /// Process Request items sent by clients.
+ 
     fn process_request(
         &self,
         msg: Request,

@@ -1,9 +1,3 @@
-//! The `drone` module provides an object for launching a HyperCube Drone,
-//! which is the custodian of any remaining tokens in a mint.
-//! The HyperCube Drone builds and send airdrop transactions,
-//! checking requests against a request cap for a given time time_slice
-//! and (to come) an IP rate limit.
-
 use bincode::{deserialize, serialize};
 use bytes::Bytes;
 use influx_db_client as influxdb;
@@ -92,7 +86,7 @@ impl Drone {
 
     pub fn check_rate_limit(&mut self, ip: IpAddr) -> Result<IpAddr, IpAddr> {
         // [WIP] This is placeholder code for a proper rate limiter.
-        // Right now it will only allow one total drone request per IP
+        // Right now it will only allow one total faucet request per IP
         if self.ip_cache.contains(&ip) {
             // Add proper error handling here
             Err(ip)
@@ -139,7 +133,7 @@ impl Drone {
         if self.check_request_limit(request_amount) {
             self.request_current += request_amount;
             metrics::submit(
-                influxdb::Point::new("drone")
+                influxdb::Point::new("faucet")
                     .add_tag("op", influxdb::Value::String("airdrop".to_string()))
                     .add_field(
                         "request_amount",
@@ -162,24 +156,24 @@ impl Drop for Drone {
     }
 }
 
-pub fn run_local_drone(mint_keypair: Keypair, network: SocketAddr, sender: Sender<SocketAddr>) {
+pub fn run_local_faucet(mint_keypair: Keypair, network: SocketAddr, sender: Sender<SocketAddr>) {
     thread::spawn(move || {
-        let drone_addr = socketaddr!(0, 0);
-        let drone = Arc::new(Mutex::new(Drone::new(
+        let faucet_addr = socketaddr!(0, 0);
+        let faucet = Arc::new(Mutex::new(Drone::new(
             mint_keypair,
-            drone_addr,
+            faucet_addr,
             network,
             None,
             None,
         )));
-        let socket = TcpListener::bind(&drone_addr).unwrap();
+        let socket = TcpListener::bind(&faucet_addr).unwrap();
         sender.send(socket.local_addr().unwrap()).unwrap();
-        info!("Drone started. Listening on: {}", drone_addr);
+        info!("Drone started. Listening on: {}", faucet_addr);
         let done = socket
             .incoming()
             .map_err(|e| debug!("failed to accept socket; error = {:?}", e))
             .for_each(move |socket| {
-                let drone2 = drone.clone();
+                let faucet2 = faucet.clone();
                 let framed = BytesCodec::new().framed(socket);
                 let (writer, reader) = framed.split();
 
@@ -187,12 +181,12 @@ pub fn run_local_drone(mint_keypair: Keypair, network: SocketAddr, sender: Sende
                     let req: DroneRequest = deserialize(&bytes).or_else(|err| {
                         Err(io::Error::new(
                             io::ErrorKind::Other,
-                            format!("deserialize packet in drone: {:?}", err),
+                            format!("deserialize packet in faucet: {:?}", err),
                         ))
                     })?;
 
                     info!("Airdrop requested...");
-                    let res1 = drone2.lock().unwrap().send_airdrop(req);
+                    let res1 = faucet2.lock().unwrap().send_airdrop(req);
                     match res1 {
                         Ok(_) => info!("Airdrop sent!"),
                         Err(_) => info!("Request limit reached for this time slice"),
@@ -202,7 +196,7 @@ pub fn run_local_drone(mint_keypair: Keypair, network: SocketAddr, sender: Sende
                     let response_vec = serialize(&response).or_else(|err| {
                         Err(io::Error::new(
                             io::ErrorKind::Other,
-                            format!("serialize signature in drone: {:?}", err),
+                            format!("serialize signature in faucet: {:?}", err),
                         ))
                     })?;
                     let response_bytes = Bytes::from(response_vec.clone());
@@ -225,7 +219,7 @@ pub fn run_local_drone(mint_keypair: Keypair, network: SocketAddr, sender: Sende
 mod tests {
     use transaction_processor::TransactionProcessor;
     use blockthread::Node;
-    use drone::{Drone, DroneRequest, REQUEST_CAP, TIME_SLICE};
+    use faucet::{Drone, DroneRequest, REQUEST_CAP, TIME_SLICE};
     use fullnode::Fullnode;
     use logger;
     use mint::Mint;
@@ -242,10 +236,10 @@ mod tests {
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
         let network_addr = "0.0.0.0:0".parse().unwrap();
-        let mut drone = Drone::new(keypair, addr, network_addr, None, Some(3));
-        assert!(drone.check_request_limit(1));
-        drone.request_current = 3;
-        assert!(!drone.check_request_limit(1));
+        let mut faucet = Drone::new(keypair, addr, network_addr, None, Some(3));
+        assert!(faucet.check_request_limit(1));
+        faucet.request_current = 3;
+        assert!(!faucet.check_request_limit(1));
     }
 
     #[test]
@@ -254,11 +248,11 @@ mod tests {
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
         let network_addr = "0.0.0.0:0".parse().unwrap();
-        let mut drone = Drone::new(keypair, addr, network_addr, None, None);
-        drone.request_current = drone.request_current + 256;
-        assert_eq!(drone.request_current, 256);
-        drone.clear_request_count();
-        assert_eq!(drone.request_current, 0);
+        let mut faucet = Drone::new(keypair, addr, network_addr, None, None);
+        faucet.request_current = faucet.request_current + 256;
+        assert_eq!(faucet.request_current, 256);
+        faucet.clear_request_count();
+        assert_eq!(faucet.request_current, 0);
     }
 
     #[test]
@@ -267,12 +261,12 @@ mod tests {
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
         let network_addr = "0.0.0.0:0".parse().unwrap();
-        let mut drone = Drone::new(keypair, addr, network_addr, None, None);
+        let mut faucet = Drone::new(keypair, addr, network_addr, None, None);
         let ip = "127.0.0.1".parse().expect("create IpAddr from string");
-        assert_eq!(drone.ip_cache.len(), 0);
-        drone.add_ip_to_cache(ip);
-        assert_eq!(drone.ip_cache.len(), 1);
-        assert!(drone.ip_cache.contains(&ip));
+        assert_eq!(faucet.ip_cache.len(), 0);
+        faucet.add_ip_to_cache(ip);
+        assert_eq!(faucet.ip_cache.len(), 1);
+        assert!(faucet.ip_cache.contains(&ip));
     }
 
     #[test]
@@ -281,27 +275,27 @@ mod tests {
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
         let network_addr = "0.0.0.0:0".parse().unwrap();
-        let mut drone = Drone::new(keypair, addr, network_addr, None, None);
+        let mut faucet = Drone::new(keypair, addr, network_addr, None, None);
         let ip = "127.0.0.1".parse().expect("create IpAddr from string");
-        assert_eq!(drone.ip_cache.len(), 0);
-        drone.add_ip_to_cache(ip);
-        assert_eq!(drone.ip_cache.len(), 1);
-        drone.clear_ip_cache();
-        assert_eq!(drone.ip_cache.len(), 0);
-        assert!(drone.ip_cache.is_empty());
+        assert_eq!(faucet.ip_cache.len(), 0);
+        faucet.add_ip_to_cache(ip);
+        assert_eq!(faucet.ip_cache.len(), 1);
+        faucet.clear_ip_cache();
+        assert_eq!(faucet.ip_cache.len(), 0);
+        assert!(faucet.ip_cache.is_empty());
     }
 
     #[test]
-    fn test_drone_default_init() {
+    fn test_faucet_default_init() {
         let keypair = Keypair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
         let network_addr = "0.0.0.0:0".parse().unwrap();
         let time_slice: Option<u64> = None;
         let request_cap: Option<u64> = None;
-        let drone = Drone::new(keypair, addr, network_addr, time_slice, request_cap);
-        assert_eq!(drone.time_slice, Duration::new(TIME_SLICE, 0));
-        assert_eq!(drone.request_cap, REQUEST_CAP);
+        let faucet = Drone::new(keypair, addr, network_addr, time_slice, request_cap);
+        assert_eq!(faucet.time_slice, Duration::new(TIME_SLICE, 0));
+        assert_eq!(faucet.request_cap, REQUEST_CAP);
     }
 
     fn tmp_ledger_path(name: &str) -> String {
@@ -342,9 +336,9 @@ mod tests {
             Some(0),
         );
 
-        let mut addr: SocketAddr = "0.0.0.0:9900".parse().expect("bind to drone socket");
-        addr.set_ip(get_ip_addr().expect("drone get_ip_addr"));
-        let mut drone = Drone::new(
+        let mut addr: SocketAddr = "0.0.0.0:9900".parse().expect("bind to faucet socket");
+        addr.set_ip(get_ip_addr().expect("faucet get_ip_addr"));
+        let mut faucet = Drone::new(
             alice.keypair(),
             addr,
             leader_data.contact_info.ncp,
@@ -352,9 +346,9 @@ mod tests {
             Some(150_000),
         );
 
-        let requests_socket = UdpSocket::bind("0.0.0.0:0").expect("drone bind to requests socket");
+        let requests_socket = UdpSocket::bind("0.0.0.0:0").expect("faucet bind to requests socket");
         let transactions_socket =
-            UdpSocket::bind("0.0.0.0:0").expect("drone bind to transactions socket");
+            UdpSocket::bind("0.0.0.0:0").expect("faucet bind to transactions socket");
 
         let mut client = ThinClient::new(
             leader_data.contact_info.rpu,
@@ -367,10 +361,10 @@ mod tests {
             airdrop_request_amount: 50,
             client_pubkey: bob_pubkey,
         };
-        let bob_sig = drone.send_airdrop(bob_req).unwrap();
+        let bob_sig = faucet.send_airdrop(bob_req).unwrap();
         assert!(client.poll_for_signature(&bob_sig).is_ok());
 
-        // restart the leader, drone should find the new one at the same gossip port
+        // restart the leader, faucet should find the new one at the same gossip port
         server.close().unwrap();
 
         let leader_keypair = Keypair::new();
@@ -378,9 +372,9 @@ mod tests {
         let leader_data = leader.info.clone();
         let server = Fullnode::new(leader, &ledger_path, leader_keypair, None, false, None);
 
-        let requests_socket = UdpSocket::bind("0.0.0.0:0").expect("drone bind to requests socket");
+        let requests_socket = UdpSocket::bind("0.0.0.0:0").expect("faucet bind to requests socket");
         let transactions_socket =
-            UdpSocket::bind("0.0.0.0:0").expect("drone bind to transactions socket");
+            UdpSocket::bind("0.0.0.0:0").expect("faucet bind to transactions socket");
 
         let mut client = ThinClient::new(
             leader_data.contact_info.rpu,
@@ -394,8 +388,8 @@ mod tests {
             client_pubkey: carlos_pubkey,
         };
 
-        // using existing drone, new thin client
-        let carlos_sig = drone.send_airdrop(carlos_req).unwrap();
+        // using existing faucet, new thin client
+        let carlos_sig = faucet.send_airdrop(carlos_req).unwrap();
         assert!(client.poll_for_signature(&carlos_sig).is_ok());
 
         let bob_balance = client.get_balance(&bob_pubkey);

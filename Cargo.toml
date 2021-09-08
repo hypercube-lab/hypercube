@@ -30,8 +30,8 @@ name = "hypercube-bench-tps"
 path = "src/bin/bench-tps.rs"
 
 [[bin]]
-name = "hypercube-drone"
-path = "src/bin/drone.rs"
+name = "hypercube-faucet"
+path = "src/bin/faucet.rs"
 
 [[bin]]
 name = "hypercube-replicator"

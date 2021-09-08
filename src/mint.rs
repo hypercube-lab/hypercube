@@ -1,4 +1,4 @@
-//! The `mint` module is a library for generating the chain's genesis block.
+ 
 
 use entry::Entry;
 use hash::{hash, Hash};

@@ -1,4 +1,4 @@
-//! The `packet` module defines data structures and methods to pull data from the network.
+ 
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use counter::Counter;
@@ -148,7 +148,7 @@ impl Default for Blob {
 
 #[derive(Debug)]
 pub enum BlobError {
-    /// the Blob's meta and data are not self-consistent
+    
     BadState,
 }
 
@@ -156,12 +156,7 @@ impl Packets {
     fn run_read_from(&mut self, socket: &UdpSocket) -> Result<usize> {
         self.packets.resize(NUM_PACKETS, Packet::default());
         let mut i = 0;
-        //DOCUMENTED SIDE-EFFECT
-        //Performance out of the IO without poll
-        //  * block on the socket until it's readable
-        //  * set the socket to non blocking
-        //  * read until it fails
-        //  * set it back to blocking before returning
+ 
         socket.set_nonblocking(false)?;
         trace!("receiving on {}", socket.local_addr().unwrap());
         loop {
@@ -355,12 +350,7 @@ impl Blob {
 
     pub fn recv_from(socket: &UdpSocket) -> Result<SharedBlobs> {
         let mut v = Vec::new();
-        //DOCUMENTED SIDE-EFFECT
-        //Performance out of the IO without poll
-        //  * block on the socket until it's readable
-        //  * set the socket to non blocking
-        //  * read until it fails
-        //  * set it back to blocking before returning
+ 
         socket.set_nonblocking(false)?;
         for i in 0..NUM_BLOBS {
             let r = SharedBlob::default();

@@ -1,4 +1,4 @@
-//! The `ncp` module implements the network control plane.
+ 
 
 use blockthread::BlockThread;
 use service::Service;

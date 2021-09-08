@@ -4,7 +4,7 @@
 
 use transaction_processor::TransactionProcessor;
 use bincode::deserialize;
-use fin_plan_transaction::BudgetTransaction;
+use fin_plan_transaction::FinPlanTransaction;
 use counter::Counter;
 use entry::Entry;
 use log::Level;

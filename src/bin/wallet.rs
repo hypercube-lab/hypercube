@@ -5,7 +5,7 @@ extern crate dirs;
 extern crate hypercube;
 
 use clap::{App, Arg, ArgMatches, SubCommand};
-use hypercube::drone::DRONE_PORT;
+use hypercube::faucet::DRONE_PORT;
 use hypercube::logger;
 use hypercube::rpc::RPC_PORT;
 use hypercube::signature::{read_keypair, KeypairUtil};
@@ -51,8 +51,8 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
 
     let leader = poll_gossip_for_leader(network, timeout)?;
 
-    let mut drone_addr = leader.contact_info.tx_creator;
-    drone_addr.set_port(DRONE_PORT);
+    let mut faucet_addr = leader.contact_info.tx_creator;
+    faucet_addr.set_port(DRONE_PORT);
 
     let rpc_addr = if let Some(proxy) = matches.value_of("proxy") {
         proxy.to_string()
@@ -72,7 +72,7 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
     Ok(WalletConfig {
         leader,
         id,
-        drone_addr, // TODO: Add an option for this.
+        faucet_addr, // TODO: Add an option for this.
         rpc_addr,
         command,
     })

@@ -1,4 +1,4 @@
-//! The `recvmmsg` module provides recvmmsg() API implementation
+ 
 
 use packet::Packet;
 use std::cmp;

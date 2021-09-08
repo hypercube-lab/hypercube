@@ -1,11 +1,11 @@
 use bincode::{deserialize, serialize};
 use bs58;
-use fin_plan_program::BudgetState;
-use fin_plan_transaction::BudgetTransaction;
+use fin_plan_program::FinPlanState;
+use fin_plan_transaction::FinPlanTransaction;
 use chrono::prelude::*;
 use clap::ArgMatches;
 use blockthread::NodeInfo;
-use drone::DroneRequest;
+use faucet::DroneRequest;
 use fullnode::Config;
 use hash::Hash;
 use reqwest;
@@ -76,7 +76,7 @@ impl error::Error for WalletError {
 pub struct WalletConfig {
     pub leader: NodeInfo,
     pub id: Keypair,
-    pub drone_addr: SocketAddr,
+    pub faucet_addr: SocketAddr,
     pub rpc_addr: String,
     pub command: WalletCommand,
 }
@@ -87,7 +87,7 @@ impl Default for WalletConfig {
         WalletConfig {
             leader: NodeInfo::new_with_socketaddr(&default_addr),
             id: Keypair::new(),
-            drone_addr: default_addr,
+            faucet_addr: default_addr,
             rpc_addr: default_addr.to_string(),
             command: WalletCommand::Balance,
         }
@@ -286,7 +286,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         WalletCommand::AirDrop(tokens) => {
             println!(
                 "Requesting airdrop of {:?} tokens from {}",
-                tokens, config.drone_addr
+                tokens, config.faucet_addr
             );
             let params = json!(format!("{}", config.id.pubkey()));
             let previous_balance = match WalletRpcRequest::GetBalance
@@ -298,7 +298,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                     "Received result of an unexpected type".to_string(),
                 ))?,
             };
-            request_airdrop(&config.drone_addr, &config.id.pubkey(), tokens as u64)?;
+            request_airdrop(&config.faucet_addr, &config.id.pubkey(), tokens as u64)?;
 
             // TODO: return airdrop Result from Drone instead of polling the
             //       network
@@ -382,7 +382,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
 
                 let contract_funds = Keypair::new();
                 let contract_state = Keypair::new();
-                let fin_plan_program_id = BudgetState::id();
+                let fin_plan_program_id = FinPlanState::id();
 
                 // Create account for contract funds
                 let tx = Transaction::system_create(
@@ -438,7 +438,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
 
                 let contract_funds = Keypair::new();
                 let contract_state = Keypair::new();
-                let fin_plan_program_id = BudgetState::id();
+                let fin_plan_program_id = FinPlanState::id();
 
                 // Create account for contract funds
                 let tx = Transaction::system_create(
@@ -491,7 +491,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
                 .as_i64();
             if let Some(0) = balance {
-                request_airdrop(&config.drone_addr, &config.id.pubkey(), 1)?;
+                request_airdrop(&config.faucet_addr, &config.id.pubkey(), 1)?;
             }
 
             let last_id = get_last_id(&config)?;
@@ -510,7 +510,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
                 .as_i64();
             if let Some(0) = balance {
-                request_airdrop(&config.drone_addr, &config.id.pubkey(), 1)?;
+                request_airdrop(&config.faucet_addr, &config.id.pubkey(), 1)?;
             }
 
             let tx = Transaction::fin_plan_new_signature(&config.id, pubkey, to, last_id);
@@ -538,17 +538,17 @@ pub fn read_leader(path: &str) -> Result<Config, WalletError> {
 }
 
 pub fn request_airdrop(
-    drone_addr: &SocketAddr,
+    faucet_addr: &SocketAddr,
     id: &Pubkey,
     tokens: u64,
 ) -> Result<Signature, Error> {
     // TODO: make this async tokio client
-    let mut stream = TcpStream::connect(drone_addr)?;
+    let mut stream = TcpStream::connect(faucet_addr)?;
     let req = DroneRequest::GetAirdrop {
         airdrop_request_amount: tokens,
         client_pubkey: *id,
     };
-    let tx = serialize(&req).expect("serialize drone request");
+    let tx = serialize(&req).expect("serialize faucet request");
     stream.write_all(&tx)?;
     let mut buffer = [0; size_of::<Signature>()];
     stream
@@ -560,7 +560,7 @@ pub fn request_airdrop(
             format!("deserialize signature in request_airdrop: {:?}", err),
         ))
     })?;
-    // TODO: add timeout to this function, in case of unresponsive drone
+    // TODO: add timeout to this function, in case of unresponsive faucet
     Ok(signature)
 }
 
@@ -668,7 +668,7 @@ mod tests {
     use transaction_processor::TransactionProcessor;
     use clap::{App, Arg, SubCommand};
     use blockthread::Node;
-    use drone::run_local_drone;
+    use faucet::run_local_faucet;
     use fullnode::Fullnode;
     use ledger::LedgerWriter;
     use mint::Mint;
@@ -1009,8 +1009,8 @@ mod tests {
         sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
-        run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
-        config.drone_addr = receiver.recv().unwrap();
+        run_local_faucet(alice.keypair(), leader_data.contact_info.ncp, sender);
+        config.faucet_addr = receiver.recv().unwrap();
         config.leader = leader_data1;
 
         let mut rpc_addr = leader_data.contact_info.ncp;
@@ -1084,14 +1084,14 @@ mod tests {
         sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
-        run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
-        let drone_addr = receiver.recv().unwrap();
+        run_local_faucet(alice.keypair(), leader_data.contact_info.ncp, sender);
+        let faucet_addr = receiver.recv().unwrap();
 
         let mut addr = leader_data.contact_info.ncp;
         addr.set_port(rpc_port);
         let rpc_addr = format!("http://{}", addr.to_string());
 
-        let signature = request_airdrop(&drone_addr, &bob_pubkey, 50);
+        let signature = request_airdrop(&faucet_addr, &bob_pubkey, 50);
         assert!(signature.is_ok());
         let params = json!(format!("{}", signature.unwrap()));
         let confirmation = WalletRpcRequest::ConfirmTransaction
@@ -1152,9 +1152,9 @@ mod tests {
         sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
-        run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
-        config_payer.drone_addr = receiver.recv().unwrap();
-        config_witness.drone_addr = config_payer.drone_addr.clone();
+        run_local_faucet(alice.keypair(), leader_data.contact_info.ncp, sender);
+        config_payer.faucet_addr = receiver.recv().unwrap();
+        config_witness.faucet_addr = config_payer.faucet_addr.clone();
         config_payer.leader = leader_data1;
         config_witness.leader = leader_data2;
 
@@ -1165,7 +1165,7 @@ mod tests {
 
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
-        let _signature = request_airdrop(&config_payer.drone_addr, &config_payer.id.pubkey(), 50);
+        let _signature = request_airdrop(&config_payer.faucet_addr, &config_payer.id.pubkey(), 50);
 
         // Make transaction (from config_payer to bob_pubkey) requiring timestamp from config_witness
         let date_string = "\"2018-09-19T17:30:59Z\"";
@@ -1273,9 +1273,9 @@ mod tests {
         sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
-        run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
-        config_payer.drone_addr = receiver.recv().unwrap();
-        config_witness.drone_addr = config_payer.drone_addr.clone();
+        run_local_faucet(alice.keypair(), leader_data.contact_info.ncp, sender);
+        config_payer.faucet_addr = receiver.recv().unwrap();
+        config_witness.faucet_addr = config_payer.faucet_addr.clone();
         config_payer.leader = leader_data1;
         config_witness.leader = leader_data2;
 
@@ -1286,7 +1286,7 @@ mod tests {
 
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
-        let _signature = request_airdrop(&config_payer.drone_addr, &config_payer.id.pubkey(), 50);
+        let _signature = request_airdrop(&config_payer.faucet_addr, &config_payer.id.pubkey(), 50);
 
         // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
         config_payer.command = WalletCommand::Pay(
@@ -1392,9 +1392,9 @@ mod tests {
         sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
-        run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
-        config_payer.drone_addr = receiver.recv().unwrap();
-        config_witness.drone_addr = config_payer.drone_addr.clone();
+        run_local_faucet(alice.keypair(), leader_data.contact_info.ncp, sender);
+        config_payer.faucet_addr = receiver.recv().unwrap();
+        config_witness.faucet_addr = config_payer.faucet_addr.clone();
         config_payer.leader = leader_data1;
         config_witness.leader = leader_data2;
 
@@ -1405,7 +1405,7 @@ mod tests {
 
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
-        let _signature = request_airdrop(&config_payer.drone_addr, &config_payer.id.pubkey(), 50);
+        let _signature = request_airdrop(&config_payer.faucet_addr, &config_payer.id.pubkey(), 50);
 
         // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
         config_payer.command = WalletCommand::Pay(

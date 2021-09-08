@@ -1,4 +1,4 @@
-//! The `netutil` module assists with networking
+ 
 
 use nix::sys::socket::setsockopt;
 use nix::sys::socket::sockopt::{ReuseAddr, ReusePort};
@@ -10,14 +10,14 @@ use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::os::unix::io::AsRawFd;
 
-/// A data type representing a public Udp socket
+ 
 pub struct UdpSocketPair {
-    pub addr: SocketAddr,    // Public address of the socket
-    pub receiver: UdpSocket, // Locally bound socket that can receive from the public address
-    pub sender: UdpSocket,   // Locally bound socket to send via public address
+    pub addr: SocketAddr,     
+    pub receiver: UdpSocket,  
+    pub sender: UdpSocket,    
 }
 
-/// Tries to determine the public IP address of this machine
+ 
 pub fn get_public_ip_addr() -> Result<IpAddr, String> {
     let body = reqwest::get("http://ifconfig.co/ip")
         .map_err(|err| err.to_string())?
@@ -49,7 +49,7 @@ pub fn parse_port_or_addr(optstr: Option<&str>, default_port: u16) -> SocketAddr
 }
 
 fn find_eth0ish_ip_addr(ifaces: &mut Vec<datalink::NetworkInterface>) -> Option<IpAddr> {
-    // put eth0 and wifi0, etc. up front of our list of candidates
+     
     ifaces.sort_by(|a, b| {
         a.name
             .chars()

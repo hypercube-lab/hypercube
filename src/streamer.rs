@@ -1,5 +1,4 @@
-//! Data from UDP connections may be effectively pulled from the streamer module, which provides a set of services for this purpose.
-//!
+ 
 use influx_db_client as influxdb;
 use metrics;
 use packet::{Blob, SharedBlobs, SharedPackets};
@@ -26,7 +25,7 @@ fn recv_loop(
     loop {
         let msgs = SharedPackets::default();
         loop {
-            // Even if the socket is busy, it is necessary to check for an escape signal (for instance the leader trasaction socket)
+            
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }

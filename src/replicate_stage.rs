@@ -1,4 +1,4 @@
-//! The `replicate_stage` replicates transactions broadcast by the leader.
+ 
 
 use transaction_processor::TransactionProcessor;
 use counter::Counter;
@@ -20,8 +20,7 @@ use std::time::Instant;
 use streamer::{responder, BlobSender};
 use vote_stage::send_validator_vote;
 
-// Implement a destructor for the ReplicateStage thread to signal it exited
-// even on panics
+ 
 struct Finalizer {
     exit_sender: Arc<AtomicBool>,
 }
@@ -31,7 +30,7 @@ impl Finalizer {
         Finalizer { exit_sender }
     }
 }
-// Implement a destructor for Finalizer.
+ 
 impl Drop for Finalizer {
     fn drop(&mut self) {
         self.exit_sender.clone().store(true, Ordering::Relaxed);
@@ -43,7 +42,7 @@ pub struct ReplicateStage {
 }
 
 impl ReplicateStage {
-    /// Process entry blobs, already in order
+   
     fn replicate_requests(
         transaction_processor: &Arc<TransactionProcessor>,
         blockthread: &Arc<RwLock<BlockThread>>,
@@ -53,7 +52,7 @@ impl ReplicateStage {
         vote_blob_sender: Option<&BlobSender>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
-        //coalesce all the available entries into a single vote
+ 
         let mut entries = window_receiver.recv_timeout(timer)?;
         while let Ok(mut more) = window_receiver.try_recv() {
             entries.append(&mut more);

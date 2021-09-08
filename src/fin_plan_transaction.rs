@@ -1,9 +1,7 @@
-//! The `fin_plan_transaction` module provides functionality for creating Budget transactions.
-
 use bincode::{deserialize, serialize};
-use fin_plan::{Budget, Condition};
+use fin_plan::{FinPlan, Condition};
 use fin_plan_instruction::{Contract, Instruction, Vote};
-use fin_plan_program::BudgetState;
+use fin_plan_program::FinPlanState;
 use chrono::prelude::*;
 use hash::Hash;
 use trx_out::Payment;
@@ -11,7 +9,7 @@ use signature::Keypair;
 use xpz_program_interface::pubkey::Pubkey;
 use transaction::Transaction;
 
-pub trait BudgetTransaction {
+pub trait FinPlanTransaction {
     fn fin_plan_new_taxed(
         from_keypair: &Keypair,
         to: Pubkey,
@@ -67,7 +65,7 @@ pub trait BudgetTransaction {
     fn verify_plan(&self) -> bool;
 }
 
-impl BudgetTransaction for Transaction {
+impl FinPlanTransaction for Transaction {
     /// Create and sign a new Transaction. Used for unit-testing.
     fn fin_plan_new_taxed(
         from_keypair: &Keypair,
@@ -80,13 +78,13 @@ impl BudgetTransaction for Transaction {
             tokens: tokens - fee,
             to,
         };
-        let fin_plan = Budget::Pay(payment);
+        let fin_plan = FinPlan::Pay(payment);
         let instruction = Instruction::NewContract(Contract { fin_plan, tokens });
         let userdata = serialize(&instruction).unwrap();
         Self::new(
             from_keypair,
             &[to],
-            BudgetState::id(),
+            FinPlanState::id(),
             userdata,
             last_id,
             fee,
@@ -111,7 +109,7 @@ impl BudgetTransaction for Transaction {
         Self::new(
             from_keypair,
             &[contract, to],
-            BudgetState::id(),
+            FinPlanState::id(),
             userdata,
             last_id,
             0,
@@ -130,7 +128,7 @@ impl BudgetTransaction for Transaction {
         Self::new(
             from_keypair,
             &[contract, to],
-            BudgetState::id(),
+            FinPlanState::id(),
             userdata,
             last_id,
             0,
@@ -140,7 +138,7 @@ impl BudgetTransaction for Transaction {
     fn fin_plan_new_vote(from_keypair: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self {
         let instruction = Instruction::NewVote(vote);
         let userdata = serialize(&instruction).expect("serialize instruction");
-        Self::new(from_keypair, &[], BudgetState::id(), userdata, last_id, fee)
+        Self::new(from_keypair, &[], FinPlanState::id(), userdata, last_id, fee)
     }
 
     /// Create and sign a postdated Transaction. Used for unit-testing.
@@ -155,19 +153,19 @@ impl BudgetTransaction for Transaction {
         last_id: Hash,
     ) -> Self {
         let fin_plan = if let Some(from) = cancelable {
-            Budget::Or(
+            FinPlan::Or(
                 (Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to }),
                 (Condition::Signature(from), Payment { tokens, to: from }),
             )
         } else {
-            Budget::After(Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to })
+            FinPlan::After(Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to })
         };
         let instruction = Instruction::NewContract(Contract { fin_plan, tokens });
         let userdata = serialize(&instruction).expect("serialize instruction");
         Self::new(
             from_keypair,
             &[contract],
-            BudgetState::id(),
+            FinPlanState::id(),
             userdata,
             last_id,
             0,
@@ -184,19 +182,19 @@ impl BudgetTransaction for Transaction {
         last_id: Hash,
     ) -> Self {
         let fin_plan = if let Some(from) = cancelable {
-            Budget::Or(
+            FinPlan::Or(
                 (Condition::Signature(witness), Payment { tokens, to }),
                 (Condition::Signature(from), Payment { tokens, to: from }),
             )
         } else {
-            Budget::After(Condition::Signature(witness), Payment { tokens, to })
+            FinPlan::After(Condition::Signature(witness), Payment { tokens, to })
         };
         let instruction = Instruction::NewContract(Contract { fin_plan, tokens });
         let userdata = serialize(&instruction).expect("serialize instruction");
         Self::new(
             from_keypair,
             &[contract],
-            BudgetState::id(),
+            FinPlanState::id(),
             userdata,
             last_id,
             0,
@@ -263,7 +261,7 @@ mod tests {
 
     #[test]
     fn test_serialize_claim() {
-        let fin_plan = Budget::Pay(Payment {
+        let fin_plan = FinPlan::Pay(Payment {
             tokens: 0,
             to: Default::default(),
         });
@@ -291,7 +289,7 @@ mod tests {
         let mut instruction = tx.instruction().unwrap();
         if let Instruction::NewContract(ref mut contract) = instruction {
             contract.tokens = 1_000_000; // <-- attack, part 1!
-            if let Budget::Pay(ref mut payment) = contract.fin_plan {
+            if let FinPlan::Pay(ref mut payment) = contract.fin_plan {
                 payment.tokens = contract.tokens; // <-- attack, part 2!
             }
         }
@@ -310,7 +308,7 @@ mod tests {
         let mut tx = Transaction::fin_plan_new(&keypair0, pubkey1, 42, zero);
         let mut instruction = tx.instruction();
         if let Some(Instruction::NewContract(ref mut contract)) = instruction {
-            if let Budget::Pay(ref mut payment) = contract.fin_plan {
+            if let FinPlan::Pay(ref mut payment) = contract.fin_plan {
                 payment.to = thief_keypair.pubkey(); // <-- attack!
             }
         }
@@ -327,7 +325,7 @@ mod tests {
         let mut tx = Transaction::fin_plan_new(&keypair0, keypair1.pubkey(), 1, zero);
         let mut instruction = tx.instruction().unwrap();
         if let Instruction::NewContract(ref mut contract) = instruction {
-            if let Budget::Pay(ref mut payment) = contract.fin_plan {
+            if let FinPlan::Pay(ref mut payment) = contract.fin_plan {
                 payment.tokens = 2; // <-- attack!
             }
         }
@@ -337,7 +335,7 @@ mod tests {
         // Also, ensure all branchs of the plan spend all tokens
         let mut instruction = tx.instruction().unwrap();
         if let Instruction::NewContract(ref mut contract) = instruction {
-            if let Budget::Pay(ref mut payment) = contract.fin_plan {
+            if let FinPlan::Pay(ref mut payment) = contract.fin_plan {
                 payment.tokens = 0; // <-- whoops!
             }
         }

@@ -1,4 +1,4 @@
-//! The `fin_plan` module provides a domain-specific language for payment plans. Users create Budget objects that
+//! The `fin_plan` module provides a domain-specific language for payment plans. Users create FinPlan objects that
 //! are given to an interpreter. The interpreter listens for `Witness` transactions,
 //! which it uses to reduce the payment plan. When the fin_plan is reduced to a
 //! `Payment`, the payment is executed.
@@ -34,7 +34,7 @@ impl Condition {
 /// A data type representing a payment plan.
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum Budget {
+pub enum FinPlan {
     /// Make a payment.
     Pay(Payment),
 
@@ -49,20 +49,20 @@ pub enum Budget {
     And(Condition, Condition, Payment),
 }
 
-impl Budget {
+impl FinPlan {
     /// Create the simplest fin_plan - one that pays `tokens` to Pubkey.
     pub fn new_payment(tokens: i64, to: Pubkey) -> Self {
-        Budget::Pay(Payment { tokens, to })
+        FinPlan::Pay(Payment { tokens, to })
     }
 
     /// Create a fin_plan that pays `tokens` to `to` after being witnessed by `from`.
     pub fn new_authorized_payment(from: Pubkey, tokens: i64, to: Pubkey) -> Self {
-        Budget::After(Condition::Signature(from), Payment { tokens, to })
+        FinPlan::After(Condition::Signature(from), Payment { tokens, to })
     }
 
     /// Create a fin_plan that pays tokens` to `to` after being witnessed by 2x `from`s
     pub fn new_2_2_multisig_payment(from0: Pubkey, from1: Pubkey, tokens: i64, to: Pubkey) -> Self {
-        Budget::And(
+        FinPlan::And(
             Condition::Signature(from0),
             Condition::Signature(from1),
             Payment { tokens, to },
@@ -71,7 +71,7 @@ impl Budget {
 
     /// Create a fin_plan that pays `tokens` to `to` after the given DateTime.
     pub fn new_future_payment(dt: DateTime<Utc>, from: Pubkey, tokens: i64, to: Pubkey) -> Self {
-        Budget::After(Condition::Timestamp(dt, from), Payment { tokens, to })
+        FinPlan::After(Condition::Timestamp(dt, from), Payment { tokens, to })
     }
 
     /// Create a fin_plan that pays `tokens` to `to` after the given DateTime
@@ -82,7 +82,7 @@ impl Budget {
         tokens: i64,
         to: Pubkey,
     ) -> Self {
-        Budget::Or(
+        FinPlan::Or(
             (Condition::Timestamp(dt, from), Payment { tokens, to }),
             (Condition::Signature(from), Payment { tokens, to: from }),
         )
@@ -91,7 +91,7 @@ impl Budget {
     /// Return Payment if the fin_plan requires no additional Witnesses.
     pub fn final_payment(&self) -> Option<Payment> {
         match self {
-            Budget::Pay(payment) => Some(payment.clone()),
+            FinPlan::Pay(payment) => Some(payment.clone()),
             _ => None,
         }
     }
@@ -99,10 +99,10 @@ impl Budget {
     /// Return true if the fin_plan spends exactly `spendable_tokens`.
     pub fn verify(&self, spendable_tokens: i64) -> bool {
         match self {
-            Budget::Pay(payment) | Budget::After(_, payment) | Budget::And(_, _, payment) => {
+            FinPlan::Pay(payment) | FinPlan::After(_, payment) | FinPlan::And(_, _, payment) => {
                 payment.tokens == spendable_tokens
             }
-            Budget::Or(a, b) => a.1.tokens == spendable_tokens && b.1.tokens == spendable_tokens,
+            FinPlan::Or(a, b) => a.1.tokens == spendable_tokens && b.1.tokens == spendable_tokens,
         }
     }
 
@@ -110,20 +110,20 @@ impl Budget {
     /// If so, modify the fin_plan in-place.
     pub fn apply_witness(&mut self, witness: &Witness, from: &Pubkey) {
         let new_fin_plan = match self {
-            Budget::After(cond, payment) if cond.is_satisfied(witness, from) => {
-                Some(Budget::Pay(payment.clone()))
+            FinPlan::After(cond, payment) if cond.is_satisfied(witness, from) => {
+                Some(FinPlan::Pay(payment.clone()))
             }
-            Budget::Or((cond, payment), _) if cond.is_satisfied(witness, from) => {
-                Some(Budget::Pay(payment.clone()))
+            FinPlan::Or((cond, payment), _) if cond.is_satisfied(witness, from) => {
+                Some(FinPlan::Pay(payment.clone()))
             }
-            Budget::Or(_, (cond, payment)) if cond.is_satisfied(witness, from) => {
-                Some(Budget::Pay(payment.clone()))
+            FinPlan::Or(_, (cond, payment)) if cond.is_satisfied(witness, from) => {
+                Some(FinPlan::Pay(payment.clone()))
             }
-            Budget::And(cond0, cond1, payment) => {
+            FinPlan::And(cond0, cond1, payment) => {
                 if cond0.is_satisfied(witness, from) {
-                    Some(Budget::After(cond1.clone(), payment.clone()))
+                    Some(FinPlan::After(cond1.clone(), payment.clone()))
                 } else if cond1.is_satisfied(witness, from) {
-                    Some(Budget::After(cond0.clone(), payment.clone()))
+                    Some(FinPlan::After(cond0.clone(), payment.clone()))
                 } else {
                     None
                 }
@@ -162,10 +162,10 @@ mod tests {
         let dt = Utc.ymd(2014, 11, 14).and_hms(8, 9, 10);
         let from = Pubkey::default();
         let to = Pubkey::default();
-        assert!(Budget::new_payment(42, to).verify(42));
-        assert!(Budget::new_authorized_payment(from, 42, to).verify(42));
-        assert!(Budget::new_future_payment(dt, from, 42, to).verify(42));
-        assert!(Budget::new_cancelable_future_payment(dt, from, 42, to).verify(42));
+        assert!(FinPlan::new_payment(42, to).verify(42));
+        assert!(FinPlan::new_authorized_payment(from, 42, to).verify(42));
+        assert!(FinPlan::new_future_payment(dt, from, 42, to).verify(42));
+        assert!(FinPlan::new_cancelable_future_payment(dt, from, 42, to).verify(42));
     }
 
     #[test]
@@ -173,9 +173,9 @@ mod tests {
         let from = Pubkey::default();
         let to = Pubkey::default();
 
-        let mut fin_plan = Budget::new_authorized_payment(from, 42, to);
+        let mut fin_plan = FinPlan::new_authorized_payment(from, 42, to);
         fin_plan.apply_witness(&Witness::Signature, &from);
-        assert_eq!(fin_plan, Budget::new_payment(42, to));
+        assert_eq!(fin_plan, FinPlan::new_payment(42, to));
     }
 
     #[test]
@@ -184,9 +184,9 @@ mod tests {
         let from = Keypair::new().pubkey();
         let to = Keypair::new().pubkey();
 
-        let mut fin_plan = Budget::new_future_payment(dt, from, 42, to);
+        let mut fin_plan = FinPlan::new_future_payment(dt, from, 42, to);
         fin_plan.apply_witness(&Witness::Timestamp(dt), &from);
-        assert_eq!(fin_plan, Budget::new_payment(42, to));
+        assert_eq!(fin_plan, FinPlan::new_payment(42, to));
     }
 
     #[test]
@@ -197,7 +197,7 @@ mod tests {
         let from = Keypair::new().pubkey();
         let to = Keypair::new().pubkey();
 
-        let mut fin_plan = Budget::new_future_payment(dt, from, 42, to);
+        let mut fin_plan = FinPlan::new_future_payment(dt, from, 42, to);
         let orig_fin_plan = fin_plan.clone();
         fin_plan.apply_witness(&Witness::Timestamp(dt), &to); // <-- Attack!
         assert_eq!(fin_plan, orig_fin_plan);
@@ -209,13 +209,13 @@ mod tests {
         let from = Pubkey::default();
         let to = Pubkey::default();
 
-        let mut fin_plan = Budget::new_cancelable_future_payment(dt, from, 42, to);
+        let mut fin_plan = FinPlan::new_cancelable_future_payment(dt, from, 42, to);
         fin_plan.apply_witness(&Witness::Timestamp(dt), &from);
-        assert_eq!(fin_plan, Budget::new_payment(42, to));
+        assert_eq!(fin_plan, FinPlan::new_payment(42, to));
 
-        let mut fin_plan = Budget::new_cancelable_future_payment(dt, from, 42, to);
+        let mut fin_plan = FinPlan::new_cancelable_future_payment(dt, from, 42, to);
         fin_plan.apply_witness(&Witness::Signature, &from);
-        assert_eq!(fin_plan, Budget::new_payment(42, from));
+        assert_eq!(fin_plan, FinPlan::new_payment(42, from));
     }
     #[test]
     fn test_2_2_multisig_payment() {
@@ -223,8 +223,8 @@ mod tests {
         let from1 = Keypair::new().pubkey();
         let to = Pubkey::default();
 
-        let mut fin_plan = Budget::new_2_2_multisig_payment(from0, from1, 42, to);
+        let mut fin_plan = FinPlan::new_2_2_multisig_payment(from0, from1, 42, to);
         fin_plan.apply_witness(&Witness::Signature, &from0);
-        assert_eq!(fin_plan, Budget::new_authorized_payment(from1, 42, to));
+        assert_eq!(fin_plan, FinPlan::new_authorized_payment(from1, 42, to));
     }
 }

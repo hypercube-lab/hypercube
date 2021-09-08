@@ -5,8 +5,8 @@
 
 use bincode::deserialize;
 use bincode::serialize;
-use fin_plan_program::BudgetState;
-use fin_plan_transaction::BudgetTransaction;
+use fin_plan_program::FinPlanState;
+use fin_plan_transaction::FinPlanTransaction;
 use counter::Counter;
 use dynamic_program::DynamicProgram;
 use entry::Entry;
@@ -66,7 +66,7 @@ pub enum TransactionProcessorError {
     /// too old and has been discarded.
     SignatureNotFound,
 
-    /// Proof of History verification failed.
+    /// Proof of Dedication verification failed.
     LedgerVerificationFailed,
     /// Contract's transaction token balance does not equal the balance after the transaction
     UnbalancedTransaction,
@@ -301,7 +301,7 @@ impl TransactionProcessor {
             } else {
                 error_counters.account_not_found_leader += 1;
             }
-            if BudgetState::check_id(&tx.program_id) {
+            if FinPlanState::check_id(&tx.program_id) {
                 use fin_plan_instruction::Instruction;
                 if let Some(Instruction::NewVote(_vote)) = tx.instruction() {
                     error_counters.account_not_found_vote += 1;
@@ -392,10 +392,10 @@ impl TransactionProcessor {
         // It's up to the contract to implement its own rules on moving funds
         if SystemProgram::check_id(&tx.program_id) {
             SystemProgram::process_transaction(&tx, accounts, &self.loaded_contracts)
-        } else if BudgetState::check_id(&tx.program_id) {
+        } else if FinPlanState::check_id(&tx.program_id) {
             // TODO: the runtime should be checking read/write access to memory
             // we are trusting the hard coded contracts not to clobber or allocate
-            if BudgetState::process_transaction(&tx, accounts).is_err() {
+            if FinPlanState::process_transaction(&tx, accounts).is_err() {
                 return Err(TransactionProcessorError::ProgramRuntimeError);
             }
         } else if StorageProgram::check_id(&tx.program_id) {
@@ -665,8 +665,8 @@ impl TransactionProcessor {
     pub fn read_balance(account: &Account) -> i64 {
         if SystemProgram::check_id(&account.program_id) {
             SystemProgram::get_balance(account)
-        } else if BudgetState::check_id(&account.program_id) {
-            BudgetState::get_balance(account)
+        } else if FinPlanState::check_id(&account.program_id) {
+            FinPlanState::get_balance(account)
         } else {
             account.tokens
         }

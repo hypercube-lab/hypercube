@@ -10,7 +10,7 @@ extern crate hypercube;
 use clap::{App, Arg};
 use hypercube::client::mk_client;
 use hypercube::blockthread::Node;
-use hypercube::drone::DRONE_PORT;
+use hypercube::faucet::DRONE_PORT;
 use hypercube::fullnode::{Config, Fullnode, FullnodeReturnType};
 use hypercube::logger;
 use hypercube::metrics::set_panic_hook;
@@ -95,8 +95,8 @@ fn main() -> () {
 
     let mut client = mk_client(&leader);
 
-    // TODO: maybe have the drone put itself in gossip somewhere instead of hardcoding?
-    let drone_addr = match network {
+    // TODO: maybe have the faucet put itself in gossip somewhere instead of hardcoding?
+    let faucet_addr = match network {
         Some(network) => SocketAddr::new(network.ip(), DRONE_PORT),
         None => SocketAddr::new(ncp.ip(), DRONE_PORT),
     };
@@ -110,14 +110,14 @@ fn main() -> () {
             break;
         }
 
-        info!("requesting airdrop from {}", drone_addr);
+        info!("requesting airdrop from {}", faucet_addr);
         loop {
-            if request_airdrop(&drone_addr, &pubkey, 50).is_ok() {
+            if request_airdrop(&faucet_addr, &pubkey, 50).is_ok() {
                 break;
             }
             info!(
-                "airdrop request, is the drone address correct {:?}, drone running?",
-                drone_addr
+                "airdrop request, is the faucet address correct {:?}, faucet running?",
+                faucet_addr
             );
             sleep(Duration::from_secs(2));
         }

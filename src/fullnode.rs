@@ -1,9 +1,7 @@
-//! The `fullnode` module hosts all the fullnode microservices.
-
 use transaction_processor::TransactionProcessor;
 use broadcast_stage::BroadcastStage;
 use blockthread::{BlockThread, Node, NodeInfo};
-use drone::DRONE_PORT;
+use faucet::DRONE_PORT;
 use entry::Entry;
 use ledger::read_ledger;
 use ncp::Ncp;
@@ -251,8 +249,8 @@ impl Fullnode {
         ));
 
         // TODO: this code assumes this node is the leader
-        let mut drone_addr = node.info.contact_info.tx_creator;
-        drone_addr.set_port(DRONE_PORT);
+        let mut faucet_addr = node.info.contact_info.tx_creator;
+        faucet_addr.set_port(DRONE_PORT);
 
         // Use custom RPC port, if provided (`Some(port)`)
         // RPC port may be any open port on the node
@@ -262,7 +260,7 @@ impl Fullnode {
         let rpc_service = JsonRpcService::new(
             &transaction_processor,
             node.info.contact_info.tx_creator,
-            drone_addr,
+            faucet_addr,
             rpc_addr,
             exit.clone(),
         );

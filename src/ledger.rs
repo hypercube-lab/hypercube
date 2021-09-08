@@ -1,10 +1,6 @@
-//! The `ledger` module provides functions for parallel verification of the
-//! Proof of History ledger as well as iterative read, append write, and random
-//! access read to a persistent file-based ledger.
-
 use bincode::{self, deserialize, deserialize_from, serialize_into, serialized_size};
 use fin_plan_instruction::Vote;
-use fin_plan_transaction::BudgetTransaction;
+use fin_plan_transaction::FinPlanTransaction;
 use entry::Entry;
 use hash::Hash;
 use log::Level::Trace;
@@ -443,7 +439,7 @@ impl Block for [Entry] {
                 entry
                     .transactions
                     .iter()
-                    .filter_map(BudgetTransaction::vote)
+                    .filter_map(FinPlanTransaction::vote)
             }).collect()
     }
 }
@@ -564,7 +560,7 @@ mod tests {
     use super::*;
     use bincode::serialized_size;
     use fin_plan_instruction::Vote;
-    use fin_plan_transaction::BudgetTransaction;
+    use fin_plan_transaction::FinPlanTransaction;
     use chrono::prelude::*;
     use entry::{next_entry, Entry};
     use hash::hash;

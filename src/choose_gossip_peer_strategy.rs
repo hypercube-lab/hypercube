@@ -37,37 +37,14 @@ impl<'a> ChooseGossipPeerStrategy for ChooseRandomPeerStrategy<'a> {
     }
 }
 
-// This strategy uses rumors accumulated from the rest of the network to weight
-// the importance of communicating with a particular validator based on cumulative network
-// perceiption of the number of updates the validator has to offer. A validator is randomly
-// picked based on a weighted sample from the pool of viable choices. The "weight", w, of a
-// particular validator "v" is calculated as follows:
-//
-//  w = [Sum for all i in I_v: (rumor_v(i) - observed(v)) * stake(i)] /
-//      [Sum for all i in I_v: Sum(stake(i))]
-//
-// where I_v is the set of all validators that returned a rumor about the update_index of
-// validator "v", stake(i) is the size of the stake of validator "i", observed(v) is the
-// observed update_index from the last direct communication validator "v", and
-// rumor_v(i) is the rumored update_index of validator "v" propagated by fellow validator "i".
 
-// This could be a problem if there are validators with large stakes lying about their
-// observed updates. There could also be a problem in network partitions, or even just
-// when certain validators are disproportionately active, where we hear more rumors about
-// certain clusters of nodes that then propagate more rumros about each other. Hopefully
-// this can be resolved with a good baseline DEFAULT_WEIGHT, or by implementing lockout
-// periods for very active validators in the future.
 
 pub struct ChooseWeightedPeerStrategy<'a> {
-    // The map of last directly observed update_index for each active validator.
-    // This is how we get observed(v) from the formula above.
+    
     remote: &'a HashMap<Pubkey, u64>,
-    // The map of rumored update_index for each active validator. Using the formula above,
-    // to find rumor_v(i), we would first look up "v" in the outer map, then look up
-    // "i" in the inner map, i.e. look up external_liveness[v][i]
+    
     external_liveness: &'a HashMap<Pubkey, HashMap<Pubkey, u64>>,
-    // A function returning the size of the stake for a particular validator, corresponds
-    // to stake(i) in the formula above.
+    
     get_stake: &'a Fn(Pubkey) -> f64,
 }
 
@@ -86,9 +63,7 @@ impl<'a> ChooseWeightedPeerStrategy<'a> {
 
     fn calculate_weighted_remote_index(&self, peer_id: Pubkey) -> u32 {
         let mut last_seen_index = 0;
-        // If the peer is not in our remote table, then we leave last_seen_index as zero.
-        // Only happens when a peer appears in our blockthread.table but not in our blockthread.remote,
-        // which means a validator was directly injected into our blockthread.table
+        
         if let Some(index) = self.remote.get(&peer_id) {
             last_seen_index = *index;
         }
@@ -104,15 +79,12 @@ impl<'a> ChooseWeightedPeerStrategy<'a> {
             return DEFAULT_WEIGHT;
         }
 
-        // Calculate the weighted average of the rumors
+        
         let mut relevant_votes = vec![];
 
         let total_stake = votes.iter().fold(0.0, |total_stake, (&id, &vote)| {
             let stake = (self.get_stake)(id);
-            // If the total stake is going to overflow u64, pick
-            // the larger of either the current total_stake, or the
-            // new stake, this way we are guaranteed to get at least u64/2
-            // sample of stake in our weighted calculation
+            
             if std::f64::MAX - total_stake < stake {
                 if stake > total_stake {
                     relevant_votes = vec![(stake, vote)];
@@ -128,20 +100,7 @@ impl<'a> ChooseWeightedPeerStrategy<'a> {
 
         let weighted_vote = relevant_votes.iter().fold(0.0, |sum, &(stake, vote)| {
             if vote < last_seen_index {
-                // This should never happen because we maintain the invariant that the indexes
-                // in the external_liveness table are always greater than the corresponding
-                // indexes in the remote table, if the index exists in the remote table at all.
-
-                // Case 1: Attempt to insert bigger index into the "external_liveness" table
-                // happens after an insertion into the "remote" table. In this case,
-                // (see apply_updates()) function, we prevent the insertion if the entry
-                // in the remote table >= the atempted insertion into the "external" liveness
-                // table.
-
-                // Case 2: Bigger index in the "external_liveness" table inserted before
-                // a smaller insertion into the "remote" table. We clear the corresponding
-                // "external_liveness" table entry on all insertions into the  "remote" table
-                // See apply_updates() function.
+                
 
                 warn!("weighted peer index was smaller than local entry in remote table");
                 return sum;
@@ -157,16 +116,12 @@ impl<'a> ChooseWeightedPeerStrategy<'a> {
             sum + new_weight
         });
 
-        // Return u32 b/c the weighted sampling API from rand::distributions
-        // only takes u32 for weights
+        
         if weighted_vote >= f64::from(std::u32::MAX) {
             return std::u32::MAX;
         }
 
-        // If the weighted rumors we've heard about aren't any greater than
-        // what we've directly learned from the last time we communicated with the
-        // peer (i.e. weighted_vote == 0), then return a weight of 1.
-        // Otherwise, return the calculated weight.
+        
         weighted_vote as u32 + DEFAULT_WEIGHT
     }
 }
@@ -205,7 +160,7 @@ mod tests {
     fn test_default() {
         logger::setup();
 
-        // Initialize the filler keys
+        
         let key1 = Keypair::new().pubkey();
 
         let remote: HashMap<Pubkey, u64> = HashMap::new();
@@ -214,8 +169,7 @@ mod tests {
         let weighted_strategy =
             ChooseWeightedPeerStrategy::new(&remote, &external_liveness, &get_stake);
 
-        // If external_liveness table doesn't contain this entry,
-        // return the default weight
+        
         let result = weighted_strategy.calculate_weighted_remote_index(key1);
         assert_eq!(result, DEFAULT_WEIGHT);
     }
@@ -224,15 +178,14 @@ mod tests {
     fn test_only_external_liveness() {
         logger::setup();
 
-        // Initialize the filler keys
+        
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
 
         let remote: HashMap<Pubkey, u64> = HashMap::new();
         let mut external_liveness: HashMap<Pubkey, HashMap<Pubkey, u64>> = HashMap::new();
 
-        // If only the liveness table contains the entry, should return the
-        // weighted liveness entries
+        
         let test_value: u32 = 5;
         let mut rumors: HashMap<Pubkey, u64> = HashMap::new();
         rumors.insert(key2, test_value as u64);
@@ -249,14 +202,14 @@ mod tests {
     fn test_overflow_votes() {
         logger::setup();
 
-        // Initialize the filler keys
+        
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
 
         let remote: HashMap<Pubkey, u64> = HashMap::new();
         let mut external_liveness: HashMap<Pubkey, HashMap<Pubkey, u64>> = HashMap::new();
 
-        // If the vote index is greater than u32::MAX, default to u32::MAX
+        
         let test_value = (std::u32::MAX as u64) + 10;
         let mut rumors: HashMap<Pubkey, u64> = HashMap::new();
         rumors.insert(key2, test_value);
@@ -273,13 +226,12 @@ mod tests {
     fn test_many_validators() {
         logger::setup();
 
-        // Initialize the filler keys
+        
         let key1 = Keypair::new().pubkey();
 
         let mut remote: HashMap<Pubkey, u64> = HashMap::new();
         let mut external_liveness: HashMap<Pubkey, HashMap<Pubkey, u64>> = HashMap::new();
 
-        // Test many validators' rumors in external_liveness
         let num_peers = 10;
         let mut rumors: HashMap<Pubkey, u64> = HashMap::new();
 
@@ -303,13 +255,11 @@ mod tests {
     fn test_many_validators2() {
         logger::setup();
 
-        // Initialize the filler keys
         let key1 = Keypair::new().pubkey();
 
         let mut remote: HashMap<Pubkey, u64> = HashMap::new();
         let mut external_liveness: HashMap<Pubkey, HashMap<Pubkey, u64>> = HashMap::new();
 
-        // Test many validators' rumors in external_liveness
         let num_peers = 10;
         let old_index = 20;
         let mut rumors: HashMap<Pubkey, u64> = HashMap::new();
@@ -328,7 +278,6 @@ mod tests {
 
         let result = weighted_strategy.calculate_weighted_remote_index(key1);
 
-        // If nobody has seen a newer update then revert to default
         assert_eq!(result, DEFAULT_WEIGHT);
     }
 }

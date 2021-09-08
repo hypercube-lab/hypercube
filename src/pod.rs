@@ -1,5 +1,4 @@
-//! The `Pod` module provides an object for generating a Proof of History.
-//! It records Hashes items on behalf of its users.
+ 
 use hash::{hash, hashv, Hash};
 
 pub struct Pod {
@@ -40,8 +39,7 @@ impl Pod {
         }
     }
 
-    // emissions of Ticks (i.e. PodEntries without a mixin) allows
-    //  validators to parallelize the work of catching up
+ 
     pub fn tick(&mut self) -> PodEntry {
         self.hash();
 

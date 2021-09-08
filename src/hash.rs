@@ -1,5 +1,3 @@
-//! The `hash` module provides functions for creating SHA-256 hashes.
-
 use bs58;
 use generic_array::typenum::U32;
 use generic_array::GenericArray;

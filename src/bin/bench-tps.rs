@@ -12,7 +12,7 @@ use influx_db_client as influxdb;
 use rayon::prelude::*;
 use hypercube::client::mk_client;
 use hypercube::blockthread::{BlockThread, NodeInfo};
-use hypercube::drone::DRONE_PORT;
+use hypercube::faucet::DRONE_PORT;
 use hypercube::hash::Hash;
 use hypercube::logger;
 use hypercube::metrics;
@@ -152,7 +152,7 @@ fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash,
             break;
         }
 
-        // Timeout after 3 minutes.  When running a CPU-only leader+validator+drone+bench-tps on a dev
+        // Timeout after 3 minutes.  When running a CPU-only leader+validator+faucet+bench-tps on a dev
         // machine, some batches of transactions can take upwards of 1 minute...
         if duration_ms > 1000 * 60 * 3 {
             println!("Error: Couldn't confirm barrier transaction!");
@@ -273,8 +273,8 @@ fn do_tx_transfers(
 }
 
 fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_count: i64) {
-    let mut drone_addr = leader.contact_info.tx_creator;
-    drone_addr.set_port(DRONE_PORT);
+    let mut faucet_addr = leader.contact_info.tx_creator;
+    faucet_addr.set_port(DRONE_PORT);
 
     let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap_or(0);
     metrics_submit_token_balance(starting_balance);
@@ -285,14 +285,14 @@ fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_c
         println!(
             "Airdropping {:?} tokens from {} for {}",
             airdrop_amount,
-            drone_addr,
+            faucet_addr,
             id.pubkey(),
         );
 
-        if let Err(e) = request_airdrop(&drone_addr, &id.pubkey(), airdrop_amount as u64) {
+        if let Err(e) = request_airdrop(&faucet_addr, &id.pubkey(), airdrop_amount as u64) {
             panic!(
                 "Error requesting airdrop: {:?} to addr: {:?} amount: {}",
-                e, drone_addr, airdrop_amount
+                e, faucet_addr, airdrop_amount
             );
         }
 

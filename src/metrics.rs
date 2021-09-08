@@ -1,4 +1,4 @@
-//! The `metrics` module enables sending measurements to an InfluxDB instance
+ 
 
 use influx_db_client as influxdb;
 use std::env;
@@ -20,8 +20,7 @@ struct MetricsAgent {
 }
 
 trait MetricsWriter {
-    // Write the points and empty the vector.  Called on the internal
-    // MetricsAgent worker thread.
+ 
     fn write(&self, points: Vec<influxdb::Point>);
 }
 
@@ -169,23 +168,20 @@ fn get_singleton_agent() -> Arc<Mutex<MetricsAgent>> {
     }
 }
 
-/// Submits a new point from any thread.  Note that points are internally queued
-/// and transmitted periodically in batches.
+ 
 pub fn submit(point: influxdb::Point) {
     let agent_mutex = get_singleton_agent();
     let agent = agent_mutex.lock().unwrap();
     agent.submit(point);
 }
 
-/// Blocks until all pending points from previous calls to `submit` have been
-/// transmitted.
+ 
 pub fn flush() {
     let agent_mutex = get_singleton_agent();
     let agent = agent_mutex.lock().unwrap();
     agent.flush();
 }
-
-/// Hook the panic handler to generate a data point on each panic
+ 
 pub fn set_panic_hook(program: &'static str) {
     use std::panic;
     use std::sync::{Once, ONCE_INIT};
@@ -228,8 +224,7 @@ pub fn set_panic_hook(program: &'static str) {
                     )
                     .to_owned(),
             );
-            // Flush metrics immediately in case the process exits immediately
-            // upon return
+           
             flush();
         }));
     });

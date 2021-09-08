@@ -8,10 +8,10 @@ const DEFAULT_METRICS_RATE: usize = 100;
 
 pub struct Counter {
     pub name: &'static str,
-    /// total accumulated value
+    
     pub counts: AtomicUsize,
     pub times: AtomicUsize,
-    /// last accumulated value logged
+  
     pub lastlog: AtomicUsize,
     pub lograte: AtomicUsize,
 }
@@ -140,8 +140,6 @@ mod tests {
     #[test]
     fn test_inc_new_counter() {
         let _readlock = get_env_lock().read();
-        //make sure that macros are syntactically correct
-        //the variable is internal to the macro scope so there is no way to introspect it
         inc_new_counter_info!("counter-1", 1);
         inc_new_counter_info!("counter-2", 1, 2);
     }

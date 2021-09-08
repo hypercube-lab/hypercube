@@ -30,7 +30,7 @@ impl JsonRpcService {
     pub fn new(
         transaction_processor: &Arc<TransactionProcessor>,
         transactions_addr: SocketAddr,
-        drone_addr: SocketAddr,
+        faucet_addr: SocketAddr,
         rpc_addr: SocketAddr,
         exit: Arc<AtomicBool>,
     ) -> Self {
@@ -46,7 +46,7 @@ impl JsonRpcService {
                     ServerBuilder::with_meta_extractor(io, move |_req: &hyper::Request<hyper::Body>| Meta {
                         request_processor: request_processor.clone(),
                         transactions_addr,
-                        drone_addr,
+                        faucet_addr,
                     }).threads(4)
                         .cors(DomainsValidation::AllowOnly(vec![
                             AccessControlAllowOrigin::Any,
@@ -82,7 +82,7 @@ impl Service for JsonRpcService {
 pub struct Meta {
     pub request_processor: JsonRpcRequestProcessor,
     pub transactions_addr: SocketAddr,
-    pub drone_addr: SocketAddr,
+    pub faucet_addr: SocketAddr,
 }
 impl Metadata for Meta {}
 
@@ -193,7 +193,7 @@ impl RpcXpz for RpcXpzImpl {
             return Err(Error::invalid_request());
         }
         let pubkey = Pubkey::new(&pubkey_vec);
-        let signature = request_airdrop(&meta.drone_addr, &pubkey, tokens)
+        let signature = request_airdrop(&meta.faucet_addr, &pubkey, tokens)
             .map_err(|_| Error::internal_error())?;
         let now = Instant::now();
         let mut signature_status;
@@ -282,7 +282,7 @@ mod tests {
 
         let request_processor = JsonRpcRequestProcessor::new(Arc::new(transaction_processor));
         let transactions_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
-        let drone_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
+        let faucet_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcXpzImpl;
@@ -290,7 +290,7 @@ mod tests {
         let meta = Meta {
             request_processor,
             transactions_addr,
-            drone_addr,
+            faucet_addr,
         };
 
         let req = format!(
@@ -350,7 +350,7 @@ mod tests {
         let meta = Meta {
             request_processor: JsonRpcRequestProcessor::new(Arc::new(transaction_processor)),
             transactions_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
-            drone_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            faucet_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
         };
 
         let res = io.handle_request_sync(req, meta);
@@ -375,7 +375,7 @@ mod tests {
         let meta = Meta {
             request_processor: JsonRpcRequestProcessor::new(Arc::new(transaction_processor)),
             transactions_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
-            drone_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            faucet_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
         };
 
         let res = io.handle_request_sync(req, meta);

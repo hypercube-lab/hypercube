@@ -8,7 +8,7 @@ Cargo.lock
 # node configuration files
 /config/
 /config-private/
-/config-drone/
+/config-faucet/
 /config-validator/
 /config-client/
 /multinode-demo/test/config-client/

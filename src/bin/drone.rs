@@ -11,7 +11,7 @@ extern crate tokio_codec;
 use bincode::{deserialize, serialize};
 use bytes::Bytes;
 use clap::{App, Arg};
-use hypercube::drone::{Drone, DroneRequest, DRONE_PORT};
+use hypercube::faucet::{Drone, DroneRequest, DRONE_PORT};
 use hypercube::logger;
 use hypercube::metrics::set_panic_hook;
 use hypercube::signature::read_keypair;
@@ -37,8 +37,8 @@ macro_rules! socketaddr {
 
 fn main() -> Result<(), Box<error::Error>> {
     logger::setup();
-    set_panic_hook("drone");
-    let matches = App::new("drone")
+    set_panic_hook("faucet");
+    let matches = App::new("faucet")
         .version(crate_version!())
         .arg(
             Arg::with_name("network")
@@ -61,7 +61,7 @@ fn main() -> Result<(), Box<error::Error>> {
                 .long("slice")
                 .value_name("SECS")
                 .takes_value(true)
-                .help("Time slice over which to limit requests to drone"),
+                .help("Time slice over which to limit requests to faucet"),
         ).arg(
             Arg::with_name("cap")
                 .long("cap")
@@ -95,31 +95,31 @@ fn main() -> Result<(), Box<error::Error>> {
         request_cap = None;
     }
 
-    let drone_addr = socketaddr!(0, DRONE_PORT);
+    let faucet_addr = socketaddr!(0, DRONE_PORT);
 
-    let drone = Arc::new(Mutex::new(Drone::new(
+    let faucet = Arc::new(Mutex::new(Drone::new(
         mint_keypair,
-        drone_addr,
+        faucet_addr,
         network,
         time_slice,
         request_cap,
     )));
 
-    let drone1 = drone.clone();
+    let faucet1 = faucet.clone();
     thread::spawn(move || loop {
-        let time = drone1.lock().unwrap().time_slice;
+        let time = faucet1.lock().unwrap().time_slice;
         thread::sleep(time);
-        drone1.lock().unwrap().clear_request_count();
+        faucet1.lock().unwrap().clear_request_count();
     });
 
-    let socket = TcpListener::bind(&drone_addr).unwrap();
-    println!("Drone started. Listening on: {}", drone_addr);
+    let socket = TcpListener::bind(&faucet_addr).unwrap();
+    println!("Drone started. Listening on: {}", faucet_addr);
     let done = socket
         .incoming()
         .map_err(|e| println!("failed to accept socket; error = {:?}", e))
         .for_each(move |socket| {
-            let drone2 = drone.clone();
-            // let client_ip = socket.peer_addr().expect("drone peer_addr").ip();
+            let faucet2 = faucet.clone();
+            // let client_ip = socket.peer_addr().expect("faucet peer_addr").ip();
             let framed = BytesCodec::new().framed(socket);
             let (writer, reader) = framed.split();
 
@@ -127,13 +127,13 @@ fn main() -> Result<(), Box<error::Error>> {
                 let req: DroneRequest = deserialize(&bytes).or_else(|err| {
                     Err(io::Error::new(
                         io::ErrorKind::Other,
-                        format!("deserialize packet in drone: {:?}", err),
+                        format!("deserialize packet in faucet: {:?}", err),
                     ))
                 })?;
 
                 println!("Airdrop requested...");
-                // let res = drone2.lock().unwrap().check_rate_limit(client_ip);
-                let res1 = drone2.lock().unwrap().send_airdrop(req);
+                // let res = faucet2.lock().unwrap().check_rate_limit(client_ip);
+                let res1 = faucet2.lock().unwrap().send_airdrop(req);
                 match res1 {
                     Ok(_) => println!("Airdrop sent!"),
                     Err(_) => println!("Request limit reached for this time slice"),
@@ -143,7 +143,7 @@ fn main() -> Result<(), Box<error::Error>> {
                 let response_vec = serialize(&response).or_else(|err| {
                     Err(io::Error::new(
                         io::ErrorKind::Other,
-                        format!("serialize signature in drone: {:?}", err),
+                        format!("serialize signature in faucet: {:?}", err),
                     ))
                 })?;
                 let response_bytes = Bytes::from(response_vec.clone());

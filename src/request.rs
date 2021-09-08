@@ -1,4 +1,4 @@
-//! The `request` module defines the messages for the thin client.
+ 
 
 use hash::Hash;
 use signature::Signature;
@@ -16,7 +16,7 @@ pub enum Request {
 }
 
 impl Request {
-    /// Verify the request is valid.
+     
     pub fn verify(&self) -> bool {
         true
     }

@@ -1,4 +1,4 @@
-//! The `retransmit_stage` retransmits blobs between validators
+ 
 
 use counter::Counter;
 use blockthread::BlockThread;

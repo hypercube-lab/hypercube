@@ -1,4 +1,4 @@
-//! The `result` module exposes a Result type that propagates one of many different Error types.
+ 
 
 use transaction_processor;
 use bincode;
