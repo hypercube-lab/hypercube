@@ -1,6 +1,5 @@
 use pubkey::Pubkey;
 
-/// An Account with userdata that is stored on chain
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Account {
     /// tokens in the account
