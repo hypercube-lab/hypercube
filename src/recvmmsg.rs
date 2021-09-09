@@ -1,5 +1,3 @@
- 
-
 use packet::Packet;
 use std::cmp;
 use std::io;
