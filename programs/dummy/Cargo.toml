@@ -1,5 +1,5 @@
 [package]
-name = "noop"
+name = "dummy"
 version = "0.1.0"
 authors = [
     "John Casper<john@hypercube-lab.org>",
@@ -16,6 +16,6 @@ authors = [
 xpz_program_interface = { path = "../../common" }
 
 [lib]
-name = "noop"
+name = "dummy"
 crate-type = ["dylib"]
 

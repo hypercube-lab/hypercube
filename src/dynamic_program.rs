@@ -106,16 +106,16 @@ mod tests {
 
     #[test]
     fn test_create_library_path() {
-        let path = create_library_path("noop");
+        let path = create_library_path("dummy");
         assert_eq!(true, Path::new(&path).exists());
         let path = create_library_path("print");
         assert_eq!(true, Path::new(&path).exists());
-        let path = create_library_path("move_funds");
+        let path = create_library_path("token_transfer");
         assert_eq!(true, Path::new(&path).exists());
     }
 
     #[test]
-    fn test_program_noop() {
+    fn test_program_dummy() {
         let data: Vec<u8> = vec![0];
         let keys = vec![Pubkey::default(); 2];
         let mut accounts = vec![Account::default(), Account::default()];
@@ -129,7 +129,7 @@ mod tests {
                 .map(|(key, account)| KeyedAccount { key, account })
                 .collect();
 
-            let dp = DynamicProgram::new("noop".to_string());
+            let dp = DynamicProgram::new("dummy".to_string());
             dp.call(&mut infos, &data);
         }
     }
@@ -156,7 +156,7 @@ mod tests {
     }
 
     #[test]
-    fn test_program_move_funds_success() {
+    fn test_program_token_transfer_success() {
         let tokens: i64 = 100;
         let data: Vec<u8> = serialize(&tokens).unwrap();
         let keys = vec![Pubkey::default(); 2];
@@ -171,7 +171,7 @@ mod tests {
                 .map(|(key, account)| KeyedAccount { key, account })
                 .collect();
 
-            let dp = DynamicProgram::new("move_funds".to_string());
+            let dp = DynamicProgram::new("token_transfer".to_string());
             dp.call(&mut infos, &data);
         }
         assert_eq!(0, accounts[0].tokens);
@@ -179,7 +179,7 @@ mod tests {
     }
 
     #[test]
-    fn test_program_move_funds_insufficient_funds() {
+    fn test_program_token_transfer_insufficient_funds() {
         let tokens: i64 = 100;
         let data: Vec<u8> = serialize(&tokens).unwrap();
         let keys = vec![Pubkey::default(); 2];
@@ -194,7 +194,7 @@ mod tests {
                 .map(|(key, account)| KeyedAccount { key, account })
                 .collect();
 
-            let dp = DynamicProgram::new("move_funds".to_string());
+            let dp = DynamicProgram::new("token_transfer".to_string());
             dp.call(&mut infos, &data);
         }
         assert_eq!(10, accounts[0].tokens);
@@ -202,7 +202,7 @@ mod tests {
     }
 
     #[test]
-    fn test_program_move_funds_succes_many_threads() {
+    fn test_program_token_transfer_succes_many_threads() {
         let num_threads = 42; // number of threads to spawn
         let num_iters = 100; // number of iterations of test in each thread
         let mut threads = Vec::new();
@@ -224,7 +224,7 @@ mod tests {
                                 .map(|(key, account)| KeyedAccount { key, account })
                                 .collect();
 
-                            let dp = DynamicProgram::new("move_funds".to_string());
+                            let dp = DynamicProgram::new("token_transfer".to_string());
                             dp.call(&mut infos, &data);
                         }
                         assert_eq!(0, accounts[0].tokens);

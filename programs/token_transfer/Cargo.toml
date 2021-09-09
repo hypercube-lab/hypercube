@@ -1,5 +1,5 @@
 [package]
-name = "move_funds"
+name = "token_transfer"
 version = "0.1.0"
 authors = [
     "John Casper<john@hypercube-lab.org>",
@@ -18,6 +18,6 @@ generic-array = { version = "0.12.0", default-features = false, features = ["ser
 xpz_program_interface = { path = "../../common" }
 
 [lib]
-name = "move_funds"
+name = "token_transfer"
 crate-type = ["dylib"]
 

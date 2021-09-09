@@ -110,7 +110,7 @@ mod test {
     use transaction::Transaction;
 
     #[test]
-    fn test_create_noop() {
+    fn test_create_dummy() {
         let from = Keypair::new();
         let to = Keypair::new();
         let mut accounts = vec![Account::default(), Account::default()];
@@ -228,7 +228,7 @@ mod test {
                 Hash::default(),
                 0,
                 program_id,
-                "move_funds".to_string(),
+                "token_transfer".to_string(),
             );
 
             SystemProgram::process_transaction(&tx, &mut accounts, &loaded_programs);
@@ -281,7 +281,7 @@ mod test {
                             Hash::default(),
                             0,
                             program_id,
-                            "move_funds".to_string(),
+                            "token_transfer".to_string(),
                         );
 
                         SystemProgram::process_transaction(&tx, &mut accounts, &loaded_programs);

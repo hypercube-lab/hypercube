@@ -26,7 +26,7 @@ mod tests {
     use xpz_program_interface::pubkey::Pubkey;
 
     #[test]
-    fn test_move_funds() {
+    fn test_token_transfer() {
         let tokens: i64 = 100;
         let data: Vec<u8> = serialize(&tokens).unwrap();
         let keys = vec![Pubkey::default(); 2];

@@ -112,9 +112,9 @@ tokio-codec = "0.1"
 untrusted = "0.6.2"
 
 [dev-dependencies]
-noop = { path = "programs/noop" }
+dummy = { path = "programs/dummy" }
 print = { path = "programs/print" }
-move_funds = { path = "programs/move_funds" }
+token_transfer = { path = "programs/token_transfer" }
 
 [[bench]]
 name = "bank"
@@ -135,14 +135,14 @@ name = "sigverify"
 members = [
     ".",
     "common",
-    "programs/noop",
+    "programs/dummy",
     "programs/print",
-    "programs/move_funds",
+    "programs/token_transfer",
 ]
 default-members = [
     ".",
     "common",
-    "programs/noop",
+    "programs/dummy",
     "programs/print",
-    "programs/move_funds",
+    "programs/token_transfer",
 ]
