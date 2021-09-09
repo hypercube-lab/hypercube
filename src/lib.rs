@@ -61,7 +61,7 @@ pub mod tx_creator;
 pub mod transaction;
 pub mod tx_signer;
 pub mod vote_stage;
-pub mod wallet;
+pub mod qtc;
 pub mod window;
 pub mod window_service;
 pub mod write_stage;

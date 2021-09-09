@@ -1,8 +1,3 @@
-//! The `transaction_processor` module tracks client accounts and the progress of smart
-//! contracts. It offers a high-level API that signs transactions
-//! on behalf of the caller, and a low-level API for when they have
-//! already been signed and verified.
-
 use bincode::deserialize;
 use bincode::serialize;
 use fin_plan_program::FinPlanState;
@@ -34,57 +29,36 @@ use timing::{duration_as_us, timestamp};
 use transaction::Transaction;
 use window::WINDOW_SIZE;
 
-/// The number of most recent `last_id` values that the transaction_processor will track the signatures
-/// of. Once the transaction_processor discards a `last_id`, it will reject any transactions that use
-/// that `last_id` in a transaction. Lowering this value reduces memory consumption,
-/// but requires clients to update its `last_id` more frequently. Raising the value
-/// lengthens the time a client must wait to be certain a missing transaction will
-/// not be processed by the network.
 pub const MAX_ENTRY_IDS: usize = 1024 * 16;
 
 pub const VERIFY_BLOCK_SIZE: usize = 16;
 
-/// Reasons a transaction might be rejected.
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TransactionProcessorError {
-    /// Attempt to debit from `Pubkey`, but no found no record of a prior credit.
+    
     AccountNotFound,
-
-    /// The from `Pubkey` does not have sufficient balance to pay the fee to schedule the transaction
+  
     InsufficientFundsForFee,
-
-    /// The transaction_processor has seen `Signature` before. This can occur under normal operation
-    /// when a UDP packet is duplicated, as a user error from a client not updating
-    /// its `last_id`, or as a double-spend attack.
+    
     DuplicateSignature,
 
-    /// The transaction_processor has not seen the given `last_id` or the transaction is too old and
-    /// the `last_id` has been discarded.
     LastIdNotFound,
 
-    /// The transaction_processor has not seen a transaction with the given `Signature` or the transaction is
-    /// too old and has been discarded.
     SignatureNotFound,
 
-    /// Proof of Dedication verification failed.
     LedgerVerificationFailed,
-    /// Contract's transaction token balance does not equal the balance after the transaction
+
     UnbalancedTransaction,
-    /// Contract's transactions resulted in an account with a negative balance
-    /// The difference from InsufficientFundsForFee is that the transaction was executed by the
-    /// contract
+
     ResultWithNegativeTokens,
 
-    /// Contract id is unknown
     UnknownContractId,
 
-    /// Contract modified an accounts contract id
     ModifiedContractId,
 
-    /// Contract spent the tokens of an account that doesn't belong to it
     ExternalAccountTokenSpend,
 
-    /// The program returned an error
     ProgramRuntimeError,
 }
 
@@ -98,32 +72,19 @@ struct ErrorCounters {
     account_not_found_vote: usize,
 }
 
-/// The state of all accounts and contracts after processing its entries.
 pub struct TransactionProcessor {
-    /// A map of account public keys to the balance in that account.
     accounts: RwLock<HashMap<Pubkey, Account>>,
 
-    /// A FIFO queue of `last_id` items, where each item is a set of signatures
-    /// that have been processed using that `last_id`. Rejected `last_id`
-    /// values are so old that the `last_id` has been pulled out of the queue.
     last_ids: RwLock<VecDeque<Hash>>,
 
-    /// Mapping of hashes to signature sets along with timestamp. The transaction_processor uses this data to
-    /// reject transactions with signatures its seen before
     last_ids_sigs: RwLock<HashMap<Hash, (SignatureStatusMap, u64)>>,
 
-    /// The number of transactions the transaction_processor has processed without error since the
-    /// start of the ledger.
     transaction_count: AtomicUsize,
 
-    /// This bool allows us to submit metrics that are specific for leaders or validators
-    /// It is set to `true` by fullnode before creating the transaction_processor.
     pub is_leader: bool,
 
-    // The latest finality time for the network
     finality_time: AtomicUsize,
 
-    // loaded contracts hashed by program_id
     loaded_contracts: RwLock<HashMap<Pubkey, DynamicProgram>>,
 }
 
@@ -142,13 +103,13 @@ impl Default for TransactionProcessor {
 }
 
 impl TransactionProcessor {
-    /// Create a default TransactionProcessor
+
     pub fn new_default(is_leader: bool) -> Self {
         let mut transaction_processor = TransactionProcessor::default();
         transaction_processor.is_leader = is_leader;
         transaction_processor
     }
-    /// Create an TransactionProcessor using a deposit.
+
     pub fn new_from_deposit(deposit: &Payment) -> Self {
         let transaction_processor = Self::default();
         {
@@ -159,7 +120,6 @@ impl TransactionProcessor {
         transaction_processor
     }
 
-    /// Create an TransactionProcessor with only a Mint. Typically used by unit tests.
     pub fn new(mint: &Mint) -> Self {
         let deposit = Payment {
             to: mint.pubkey(),
@@ -170,13 +130,12 @@ impl TransactionProcessor {
         transaction_processor
     }
 
-    /// Commit funds to the given account
     fn apply_payment(payment: &Payment, account: &mut Account) {
         trace!("apply payments {}", payment.tokens);
         account.tokens += payment.tokens;
     }
 
-    /// Return the last entry ID registered.
+
     pub fn last_id(&self) -> Hash {
         let last_ids = self.last_ids.read().expect("'last_ids' read lock");
         let last_item = last_ids
@@ -186,7 +145,6 @@ impl TransactionProcessor {
         *last_item
     }
 
-    /// Store the given signature. The transaction_processor will reject any transaction with the same signature.
     fn reserve_signature(signatures: &mut SignatureStatusMap, signature: &Signature) -> Result<()> {
         if let Some(_result) = signatures.get(signature) {
             return Err(TransactionProcessorError::DuplicateSignature);
@@ -195,7 +153,6 @@ impl TransactionProcessor {
         Ok(())
     }
 
-    /// Forget all signatures. Useful for benchmarking.
     pub fn clear_signatures(&self) {
         for (_, sigs) in self.last_ids_sigs.write().unwrap().iter_mut() {
             sigs.0.clear();
@@ -240,11 +197,7 @@ impl TransactionProcessor {
         }
     }
 
-    /// Look through the last_ids and find all the valid ids
-    /// This is batched to avoid holding the lock for a significant amount of time
-    ///
-    /// Return a vec of tuple of (valid index, timestamp)
-    /// index is into the passed ids slice to avoid copying hashes
+
     pub fn count_valid_ids(&self, ids: &[Hash]) -> Vec<(usize, u64)> {
         let last_ids = self.last_ids_sigs.read().unwrap();
         let mut ret = Vec::new();
@@ -256,10 +209,7 @@ impl TransactionProcessor {
         ret
     }
 
-    /// Tell the transaction_processor which Entry IDs exist on the ledger. This function
-    /// assumes subsequent calls correspond to later entries, and will boot
-    /// the oldest ones once its internal cache is full. Once boot, the
-    /// transaction_processor will reject transactions using that `last_id`.
+
     pub fn register_entry_id(&self, last_id: &Hash) {
         let mut last_ids = self
             .last_ids
@@ -277,7 +227,6 @@ impl TransactionProcessor {
         last_ids.push_back(*last_id);
     }
 
-    /// Process a Transaction. This is used for unit tests and simply calls the vector TransactionProcessor::process_transactions method.
     pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
         match self.process_transactions(&[tx.clone()])[0] {
             Err(ref e) => {
@@ -294,7 +243,7 @@ impl TransactionProcessor {
         accounts: &HashMap<Pubkey, Account>,
         error_counters: &mut ErrorCounters,
     ) -> Result<Vec<Account>> {
-        // Copy all the accounts
+
         if accounts.get(&tx.keys[0]).is_none() {
             if !self.is_leader {
                 error_counters.account_not_found_validator += 1;
@@ -316,8 +265,6 @@ impl TransactionProcessor {
                 .iter()
                 .map(|key| accounts.get(key).cloned().unwrap_or_default())
                 .collect();
-            // There is no way to predict what contract will execute without an error
-            // If a fee can pay for execution then the contract will be scheduled
             self.reserve_signature_with_last_id(&tx.signature, &tx.last_id)?;
             called_accounts[0].tokens -= tx.fee;
             Ok(called_accounts)
@@ -341,16 +288,14 @@ impl TransactionProcessor {
         pre_tokens: i64,
         account: &Account,
     ) -> Result<()> {
-        // Verify the transaction
-        // make sure that program_id is still the same or this was just assigned by the system call contract
+
         if !((*pre_program_id == account.program_id)
             || (SystemProgram::check_id(&tx.program_id)
                 && SystemProgram::check_id(&pre_program_id)))
         {
-            //TODO, this maybe redundant bpf should be able to guarantee this property
             return Err(TransactionProcessorError::ModifiedContractId);
         }
-        // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
+
         if tx.program_id != account.program_id && pre_tokens > account.tokens {
             return Err(TransactionProcessorError::ExternalAccountTokenSpend);
         }
@@ -377,10 +322,7 @@ impl TransactionProcessor {
         }
     }
 
-    /// Execute a transaction.
-    /// This method calls the contract's process_transaction method and verifies that the result of
-    /// the contract does not violate the transaction_processor's accounting rules.
-    /// The accounts are committed back to the transaction_processor only if this function returns Ok(_).
+
     fn execute_transaction(&self, tx: &Transaction, accounts: &mut [Account]) -> Result<()> {
         let pre_total: i64 = accounts.iter().map(|a| a.tokens).sum();
         let pre_data: Vec<_> = accounts
@@ -388,13 +330,11 @@ impl TransactionProcessor {
             .map(|a| (a.program_id, a.tokens))
             .collect();
 
-        // Call the contract method
-        // It's up to the contract to implement its own rules on moving funds
+  
         if SystemProgram::check_id(&tx.program_id) {
             SystemProgram::process_transaction(&tx, accounts, &self.loaded_contracts)
         } else if FinPlanState::check_id(&tx.program_id) {
-            // TODO: the runtime should be checking read/write access to memory
-            // we are trusting the hard coded contracts not to clobber or allocate
+
             if FinPlanState::process_transaction(&tx, accounts).is_err() {
                 return Err(TransactionProcessorError::ProgramRuntimeError);
             }
@@ -414,11 +354,11 @@ impl TransactionProcessor {
         } else {
             return Err(TransactionProcessorError::UnknownContractId);
         }
-        // Verify the transaction
+
         for ((pre_program_id, pre_tokens), post_account) in pre_data.iter().zip(accounts.iter()) {
             Self::verify_transaction(&tx, pre_program_id, *pre_tokens, post_account)?;
         }
-        // The total sum of all the tokens in all the pages cannot change.
+
         let post_total: i64 = accounts.iter().map(|a| a.tokens).sum();
         if pre_total != post_total {
             Err(TransactionProcessorError::UnbalancedTransaction)
@@ -441,7 +381,6 @@ impl TransactionProcessor {
             let tx = &txs[i];
             let acc = racc.as_ref().unwrap();
             for (key, account) in tx.keys.iter().zip(acc.iter()) {
-                //purge if 0
                 if account.tokens == 0 {
                     accounts.remove(&key);
                 } else {
@@ -452,13 +391,10 @@ impl TransactionProcessor {
         }
     }
 
-    /// Process a batch of transactions.
     #[must_use]
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         debug!("processing transactions: {}", txs.len());
-        // TODO right now a single write lock is held for the duration of processing all the
-        // transactions
-        // To break this lock each account needs to be locked to prevent concurrent access
+
         let mut accounts = self.accounts.write().unwrap();
         let txs_len = txs.len();
         let mut error_counters = ErrorCounters::default();
@@ -537,8 +473,6 @@ impl TransactionProcessor {
         Ok(())
     }
 
-    /// Process an ordered list of entries, populating a circular buffer "tail"
-    ///   as we go.
     fn process_entries_tail(
         &self,
         entries: Vec<Entry>,
@@ -562,7 +496,6 @@ impl TransactionProcessor {
         Ok(entry_count)
     }
 
-    /// Process an ordered list of entries.
     pub fn process_entries(&self, entries: &[Entry]) -> Result<()> {
         for entry in entries {
             self.process_entry(&entry)?;
@@ -570,7 +503,6 @@ impl TransactionProcessor {
         Ok(())
     }
 
-    /// Append entry blocks to the ledger, verifying them along the way.
     fn process_blocks<I>(
         &self,
         start_hash: Hash,
@@ -581,8 +513,7 @@ impl TransactionProcessor {
     where
         I: IntoIterator<Item = Entry>,
     {
-        // Ledger verification needs to be parallelized, but we can't pull the whole
-        // thing into memory. We therefore chunk it.
+
         let mut entry_count = *tail_idx as u64;
         let mut id = start_hash;
         for block in &entries.into_iter().chunks(VERIFY_BLOCK_SIZE) {
@@ -597,20 +528,16 @@ impl TransactionProcessor {
         Ok(entry_count)
     }
 
-    /// Process a full ledger.
+
     pub fn process_ledger<I>(&self, entries: I) -> Result<(u64, Vec<Entry>)>
     where
         I: IntoIterator<Item = Entry>,
     {
         let mut entries = entries.into_iter();
 
-        // The first item in the ledger is required to be an entry with zero num_hashes,
-        // which implies its id can be used as the ledger's seed.
         let entry0 = entries.next().expect("invalid ledger: empty");
 
-        // The second item in the ledger is a special transaction where the to and from
-        // fields are the same. That entry should be treated as a deposit, not a
-        // transfer to oneself.
+
         let entry1 = entries
             .next()
             .expect("invalid ledger: need at least 2 entries");
@@ -640,7 +567,6 @@ impl TransactionProcessor {
         let mut tail_idx = 2;
         let entry_count = self.process_blocks(entry1_id, entries, &mut tail, &mut tail_idx)?;
 
-        // check f we need to rotate tail
         if tail.len() == WINDOW_SIZE as usize {
             tail.rotate_left(tail_idx)
         }
@@ -648,8 +574,7 @@ impl TransactionProcessor {
         Ok((entry_count, tail))
     }
 
-    /// Create, sign, and process a Transaction from `keypair` to `to` of
-    /// `n` tokens where `last_id` is the last Entry ID observed by the client.
+
     pub fn transfer(
         &self,
         n: i64,
@@ -671,8 +596,7 @@ impl TransactionProcessor {
             account.tokens
         }
     }
-    /// Each contract would need to be able to introspect its own state
-    /// this is hard coded to the fin_plan contract language
+
     pub fn get_balance(&self, pubkey: &Pubkey) -> i64 {
         self.get_account(pubkey)
             .map(|x| Self::read_balance(&x))
@@ -705,8 +629,7 @@ impl TransactionProcessor {
         self.get_signature_status(signature) != Err(TransactionProcessorError::SignatureNotFound)
     }
 
-    /// Hash the `accounts` HashMap. This represents a validator's interpretation
-    ///  of the ledger up to the `last_id`, to be sent back to the leader when voting.
+
     pub fn hash_internal_state(&self) -> Hash {
         let mut ordered_accounts = BTreeMap::new();
         for (pubkey, account) in self.accounts.read().unwrap().iter() {
@@ -774,15 +697,14 @@ mod tests {
         assert_eq!(transaction_processor.transaction_count(), 0);
     }
 
-    // TODO: This test demonstrates that fees are not paid when a program fails.
-    // See github issue 1157 (https://github.com/hypercube-labs/hypercube/issues/1157)
+
     #[test]
     fn test_detect_failed_duplicate_transactions_issue_1157() {
         let mint = Mint::new(1);
         let transaction_processor = TransactionProcessor::new(&mint);
         let dest = Keypair::new();
 
-        // source with 0 contract context
+
         let tx = Transaction::system_create(
             &mint.keypair(),
             dest.pubkey(),
@@ -796,7 +718,7 @@ mod tests {
         assert!(!transaction_processor.has_signature(&signature));
         let res = transaction_processor.process_transaction(&tx);
 
-        // Result failed, but signature is registered
+
         assert!(!res.is_ok());
         assert!(transaction_processor.has_signature(&signature));
         assert_matches!(
@@ -804,11 +726,9 @@ mod tests {
             Err(TransactionProcessorError::ResultWithNegativeTokens)
         );
 
-        // The tokens didn't move, but the from address paid the transaction fee.
+
         assert_eq!(transaction_processor.get_balance(&dest.pubkey()), 0);
 
-        // BUG: This should be the original balance minus the transaction fee.
-        //assert_eq!(transaction_processor.get_balance(&mint.pubkey()), 0);
     }
 
     #[test]
@@ -911,7 +831,7 @@ mod tests {
             let last_id = hash(&serialize(&i).unwrap()); // Unique hash
             transaction_processor.register_entry_id(&last_id);
         }
-        // Assert we're no longer able to use the oldest entry ID.
+
         assert_eq!(
             transaction_processor.reserve_signature_with_last_id(&signature, &mint.last_id()),
             Err(TransactionProcessorError::LastIdNotFound)
@@ -1036,12 +956,7 @@ mod tests {
 
     #[test]
     fn test_process_ledger_around_window_size() {
-        // TODO: put me back in when Criterion is up
-        //        for _ in 0..10 {
-        //            let (ledger, _) = create_sample_ledger(WINDOW_SIZE as usize);
-        //            let transaction_processor = TransactionProcessor::default();
-        //            let (_, _) = transaction_processor.process_ledger(ledger).unwrap();
-        //        }
+
 
         let window_size = WINDOW_SIZE as usize;
         for entry_count in window_size - 3..window_size + 2 {
@@ -1056,7 +971,6 @@ mod tests {
         }
     }
 
-    // Write the given entries to a file and then return a file iterator to them.
     fn to_file_iter(entries: impl Iterator<Item = Entry>) -> impl Iterator<Item = Entry> {
         let mut file = Cursor::new(vec![]);
         EntryWriter::write_entries(&mut file, entries).unwrap();

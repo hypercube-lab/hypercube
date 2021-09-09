@@ -1,7 +1,3 @@
-//! The `transaction_processoring_stage` processes Transaction messages. It is intended to be used
-//! to contruct a software pipeline. The stage uses all available CPU cores and
-//! can do its processing in parallel with signature verification on the GPU.
-
 use transaction_processor::TransactionProcessor;
 use bincode::deserialize;
 use fin_plan_transaction::FinPlanTransaction;
@@ -25,31 +21,23 @@ use std::time::Instant;
 use timing;
 use transaction::Transaction;
 
-// number of threads is 1 until mt transaction_processor is ready
 pub const NUM_THREADS: usize = 1;
 
-/// Stores the stage's thread handle and outx_creatort receiver.
 pub struct TransactionProcessoringStage {
-    /// Handle to the stage's thread.
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
 pub enum Config {
-    /// * `Tick` - Run full PoH thread.  Tick is a rough estimate of how many hashes to roll before transmitting a new entry.
     Tick(usize),
-    /// * `Sleep`- Low power mode.  Sleep is a rough estimate of how long to sleep before rolling 1 pod once and producing 1
-    /// tick.
     Sleep(Duration),
 }
 
 impl Default for Config {
     fn default() -> Config {
-        // TODO: Change this to Tick to enable PoH
         Config::Sleep(Duration::from_millis(500))
     }
 }
 impl TransactionProcessoringStage {
-    /// Create the stage using `transaction_processor`. Exit when `verified_receiver` is dropped.
     pub fn new(
         transaction_processor: &Arc<TransactionProcessor>,
         verified_receiver: Receiver<VerifiedPackets>,
@@ -59,14 +47,8 @@ impl TransactionProcessoringStage {
         let shared_verified_receiver = Arc::new(Mutex::new(verified_receiver));
         let pod = PodRecorder::new(transaction_processor.clone(), entry_sender);
         let tick_pod = pod.clone();
-        // Tick producer is a headless producer, so when it exits it should notify the transaction_processoring stage.
-        // Since channel are not used to talk between these threads an AtomicBool is used as a
-        // signal.
         let pod_exit = Arc::new(AtomicBool::new(false));
         let transaction_processoring_exit = pod_exit.clone();
-        // Single thread to generate entries from many transaction_processors.
-        // This thread talks to pod_service and broadcasts the entries once they have been recorded.
-        // Once an entry has been recorded, its last_id is registered with the transaction_processor.
         let tick_producer = Builder::new()
             .name("hypercube-transaction_processoring-stage-tick_producer".to_string())
             .spawn(move || {
@@ -83,7 +65,6 @@ impl TransactionProcessoringStage {
                 pod_exit.store(true, Ordering::Relaxed);
             }).unwrap();
 
-        // Many transaction_processors that process transactions in parallel.
         let mut thread_hdls: Vec<JoinHandle<()>> = (0..NUM_THREADS)
             .into_iter()
             .map(|_| {
@@ -123,8 +104,7 @@ impl TransactionProcessoringStage {
         (TransactionProcessoringStage { thread_hdls }, entry_receiver)
     }
 
-    /// Convert the transactions from a blob of binary data to a vector of transactions and
-    /// an unused `SocketAddr` that could be used to send a response.
+
     fn deserialize_transactions(p: &Packets) -> Vec<Option<(Transaction, SocketAddr)>> {
         p.packets
             .par_iter()
@@ -189,8 +169,7 @@ impl TransactionProcessoringStage {
         Ok(())
     }
 
-    /// Process the incoming packets and send outx_creatort `Signal` messages to `signal_sender`.
-    /// Discard packets via `packet_recycler`.
+
     pub fn process_packets(
         transaction_processor: &Arc<TransactionProcessor>,
         verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
@@ -329,21 +308,16 @@ mod tests {
         let (transaction_processoring_stage, entry_receiver) =
             TransactionProcessoringStage::new(&transaction_processor, verified_receiver, Default::default());
 
-        // good tx
         let keypair = mint.keypair();
         let tx = Transaction::system_new(&keypair, keypair.pubkey(), 1, start_hash);
 
-        // good tx, but no verify
         let tx_no_ver = Transaction::system_new(&keypair, keypair.pubkey(), 1, start_hash);
 
-        // bad tx, AccountNotFound
         let keypair = Keypair::new();
         let tx_anf = Transaction::system_new(&keypair, keypair.pubkey(), 1, start_hash);
 
-        // send 'em over
         let packets = to_packets(&[tx, tx_no_ver, tx_anf]);
 
-        // glad they all fit
         assert_eq!(packets.len(), 1);
         verified_sender                       // tx, no_ver, anf
             .send(vec![(packets[0].clone(), vec![1u8, 0u8, 1u8])])
@@ -351,7 +325,6 @@ mod tests {
 
         drop(verified_sender);
 
-        //receive entries + ticks
         let entries: Vec<_> = entry_receiver.iter().map(|x| x).collect();
         assert!(entries.len() >= 1);
 
@@ -366,16 +339,12 @@ mod tests {
     }
     #[test]
     fn test_transaction_processoring_stage_entryfication() {
-        // In this attack we'll demonstrate that a verifier can interpret the ledger
-        // differently if either the server doesn't signal the ledger to add an
-        // Entry OR if the verifier tries to parallelize across multiple Entries.
         let mint = Mint::new(2);
         let transaction_processor = Arc::new(TransactionProcessor::new(&mint));
         let (verified_sender, verified_receiver) = channel();
         let (transaction_processoring_stage, entry_receiver) =
             TransactionProcessoringStage::new(&transaction_processor, verified_receiver, Default::default());
 
-        // Process a batch that includes a transaction that receives two tokens.
         let alice = Keypair::new();
         let tx = Transaction::system_new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
 
@@ -384,7 +353,6 @@ mod tests {
             .send(vec![(packets[0].clone(), vec![1u8])])
             .unwrap();
 
-        // Process a second batch that spends one of those tokens.
         let tx = Transaction::system_new(&alice, mint.pubkey(), 1, mint.last_id());
         let packets = to_packets(&[tx]);
         verified_sender
@@ -393,14 +361,11 @@ mod tests {
         drop(verified_sender);
         assert_eq!(transaction_processoring_stage.join().unwrap(), ());
 
-        // Collect the ledger and feed it to a new transaction_processor.
         let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
-        // same assertion as running through the transaction_processor, really...
+
         assert!(entries.len() >= 2);
 
-        // Assert the user holds one token, not two. If the stage only outx_creatorts one
-        // entry, then the second transaction will be rejected, because it drives
-        // the account balance below zero before the credit is added.
+
         let transaction_processor = TransactionProcessor::new(&mint);
         for entry in entries {
             assert!(

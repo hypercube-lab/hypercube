@@ -1,7 +1,3 @@
-//! storage program
-//!  Receive mining proofs from miners, validate the answers
-//!  and give reward for good proofs.
-
 use bincode::deserialize;
 use xpz_program_interface::account::Account;
 use xpz_program_interface::pubkey::Pubkey;

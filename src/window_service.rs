@@ -1,5 +1,3 @@
-//! The `window_service` provides a thread for maintaining a window (tail of the ledger).
-//!
 use counter::Counter;
 use blockthread::{BlockThread, NodeInfo};
 use entry::EntrySender;
@@ -26,23 +24,19 @@ pub enum WindowServiceReturnType {
 }
 
 fn repair_backoff(last: &mut u64, times: &mut usize, consumed: u64) -> bool {
-    //exponential backoff
+
     if *last != consumed {
-        //start with a 50% chance of asking for repairs
+    
         *times = 1;
     }
     *last = consumed;
     *times += 1;
 
-    // Experiment with capping repair request duration.
-    // Once nodes are too far behind they can spend many
-    // seconds without asking for repair
     if *times > MAX_REPAIR_BACKOFF {
-        // 50% chance that a request will fire between 64 - 128 tries
+
         *times = MAX_REPAIR_BACKOFF / 2;
     }
 
-    //if we get lucky, make the request, which should exponentially get less likely
     thread_rng().gen_range(0, *times as u64) == 0
 }
 
@@ -52,8 +46,7 @@ fn add_block_to_retransmit_queue(
     retransmit_queue: &mut Vec<SharedBlob>,
 ) {
     let p = b.read().unwrap();
-    //TODO this check isn't safe against adverserial packets
-    //we need to maintain a sequence window
+
     trace!(
         "idx: {} addr: {:?} id: {:?} leader: {:?}",
         p.get_index()
@@ -67,11 +60,7 @@ fn add_block_to_retransmit_queue(
         .expect("get_id in fn add_block_to_retransmit_queue")
         == leader_id
     {
-        //TODO
-        //need to copy the retransmitted blob
-        //otherwise we get into races with which thread
-        //should do the recycling
-        //
+
         let nv = SharedBlob::default();
         {
             let mut mnv = nv.write().unwrap();
@@ -193,9 +182,7 @@ fn recv_window(
             continue;
         }
 
-        // For downloading storage blobs,
-        // we only want up to a certain index
-        // then stop
+        
         if max_ix != 0 && pix > max_ix {
             continue;
         }

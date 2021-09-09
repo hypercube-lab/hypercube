@@ -6,7 +6,7 @@ extern crate serde_json;
 extern crate hypercube;
 
 use clap::{App, Arg};
-use hypercube::wallet::gen_keypair_file;
+use hypercube::qtc::gen_keypair_file;
 use std::error;
 
 fn main() -> Result<(), Box<error::Error>> {

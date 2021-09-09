@@ -1,5 +1,3 @@
-//! The `store_ledger` stores the ledger from received entries for storage nodes
-
 use counter::Counter;
 use entry::EntryReceiver;
 use ledger::LedgerWriter;

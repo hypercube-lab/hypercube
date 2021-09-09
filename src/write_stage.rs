@@ -1,7 +1,3 @@
-//! The `write_stage` module implements the TPU's write stage. It
-//! writes entries to the given writer, which is typically a file or
-//! stdout, and then sends the Entry to its outx_creatort channel.
-
 use transaction_processor::TransactionProcessor;
 use counter::Counter;
 use blockthread::BlockThread;
@@ -34,9 +30,7 @@ pub struct WriteStage {
 }
 
 impl WriteStage {
-    // Given a vector of potential new entries to write, return as many as we can
-    // fit before we hit the entry height for leader rotation. Also return a boolean
-    // reflecting whether we actually hit an entry height for leader rotation.
+    
     fn find_leader_rotation_index(
         blockthread: &Arc<RwLock<BlockThread>>,
         leader_rotation_interval: u64,
@@ -45,7 +39,7 @@ impl WriteStage {
     ) -> (Vec<Entry>, bool) {
         let new_entries_length = new_entries.len();
 
-        // i is the number of entries to take
+        
         let mut i = 0;
         let mut is_leader_rotation = false;
 
@@ -64,14 +58,11 @@ impl WriteStage {
                 break;
             }
 
-            // Find out how many more entries we can squeeze in until the next leader
-            // rotation
+            
             let entries_until_leader_rotation =
                 leader_rotation_interval - (entry_height % leader_rotation_interval);
 
-            // Check the next leader rotation height entries in new_entries, or
-            // if the new_entries doesnt have that many entries remaining,
-            // just check the rest of the new_entries_vector
+            
             i += cmp::min(
                 entries_until_leader_rotation as usize,
                 new_entries_length - i,
@@ -83,8 +74,7 @@ impl WriteStage {
         (new_entries, is_leader_rotation)
     }
 
-    /// Process any Entry items that have been published by the RecordStage.
-    /// continuosly send entries out
+    
     pub fn write_and_send_entries(
         blockthread: &Arc<RwLock<BlockThread>>,
         ledger_writer: &mut LedgerWriter,
@@ -100,8 +90,7 @@ impl WriteStage {
         let mut num_txs = 0;
 
         loop {
-            // Find out how many more entries we can squeeze in until the next leader
-            // rotation
+            
             let (new_entries, is_leader_rotation) = Self::find_leader_rotation_index(
                 blockthread,
                 leader_rotation_interval,
@@ -140,15 +129,12 @@ impl WriteStage {
             blockthread_votes_total += duration_as_ms(&blockthread_votes_start.elapsed());
 
             ledger_writer.write_entries(entries.clone())?;
-            // Once the entries have been written to the ledger, then we can
-            // safely incement entry height
+            
             *entry_height += entries.len() as u64;
 
             inc_new_counter_info!("write_stage-write_entries", entries.len());
 
-            //TODO(anatoly): real stake based voting needs to change this
-            //leader simply votes if the current set of validators have voted
-            //on a valid last id
+            
 
             trace!("New entries? {}", entries.len());
             let entries_send_start = Instant::now();
@@ -174,7 +160,7 @@ impl WriteStage {
         Ok(())
     }
 
-    /// Create a new WriteStage for writing and broadcasting entries.
+    
     pub fn new(
         keypair: Arc<Keypair>,
         transaction_processor: Arc<TransactionProcessor>,
@@ -207,10 +193,6 @@ impl WriteStage {
                 }
                 let mut entry_height = entry_height;
                 loop {
-                    // Note that entry height is not zero indexed, it starts at 1, so the
-                    // old leader is in power up to and including entry height
-                    // n * leader_rotation_interval for some "n". Once we've forwarded
-                    // that last block, check for the next scheduled leader.
                     if entry_height % (leader_rotation_interval as u64) == 0 {
                         let rblockthread = blockthread.read().unwrap();
                         let my_id = rblockthread.my_data().id;
@@ -218,12 +200,9 @@ impl WriteStage {
                         drop(rblockthread);
                         match scheduled_leader {
                             Some(id) if id == my_id => (),
-                            // If the leader stays in power for the next
-                            // round as well, then we don't exit. Otherwise, exit.
+                            
                             _ => {
-                                // When the broadcast stage has received the last blob, it
-                                // will signal to close the fetch stage, which will in turn
-                                // close down this write stage
+                                
                                 return WriteStageReturnType::LeaderRotation;
                             }
                         }
@@ -388,15 +367,13 @@ mod tests {
 
         let genesis_entry_height = write_stage_info.ledger_tail.len() as u64;
 
-        // Input enough entries to make exactly leader_rotation_interval entries, which will
-        // trigger a check for leader rotation. Because the next scheduled leader
-        // is ourselves, we won't exit
+         
         for _ in genesis_entry_height..leader_rotation_interval {
             let new_entry = next_entries_mut(&mut last_id, &mut num_hashes, vec![]);
             write_stage_info.entry_sender.send(new_entry).unwrap();
         }
 
-        // Set the scheduled next leader in the blockthread to some other node
+         
         let leader2_keypair = Keypair::new();
         let leader2_info = Node::new_localhost_with_pubkey(leader2_keypair.pubkey());
 
@@ -406,10 +383,7 @@ mod tests {
             wblockthread.set_scheduled_leader(2 * leader_rotation_interval, leader2_keypair.pubkey());
         }
 
-        // Input another leader_rotation_interval dummy entries one at a time,
-        // which will take us past the point of the leader rotation.
-        // The write_stage will see that it's no longer the leader after
-        // checking the schedule, and exit
+         
         for _ in 0..leader_rotation_interval {
             let new_entry = next_entries_mut(&mut last_id, &mut num_hashes, vec![]);
             write_stage_info.entry_sender.send(new_entry).unwrap();

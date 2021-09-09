@@ -21,53 +21,14 @@ use std::path::Path;
 use transaction::Transaction;
 use window::WINDOW_SIZE;
 
-//
-// A persistent ledger is 2 files:
-//  ledger_path/ --+
-//                 +-- index <== an array of u64 offsets into data,
-//                 |               each offset points to the first bytes
-//                 |               of a u64 that contains the length of
-//                 |               the entry.  To make the code smaller,
-//                 |               index[0] is set to 0, TODO: this field
-//                 |               could later be used for other stuff...
-//                 +-- data  <== concatenated instances of
-//                                    u64 length
-//                                    entry data
-//
-// When opening a ledger, we have the ability to "audit" it, which means we need
-//  to pick which file to use as "truth", and correct the other file as
-//  necessary, if possible.
-//
-// The protocol for writing the ledger is to append to the data file first, the
-//   index file 2nd.  If the writing node is interupted while appending to the
-//   ledger, there are some possibilities we need to cover:
-//
-//     1. a partial write of data, which might be a partial write of length
-//          or a partial write entry data
-//     2. a partial or missing write to index for that entry
-//
-// There is also the possibility of "unsynchronized" reading of the ledger
-//   during transfer across nodes via rsync (or whatever).  In this case, if the
-//   transfer of the data file is done before the transfer of the index file,
-//   it's likely that the index file will be far ahead of the data file in time.
-//
-// The quickest and most reliable strategy for recovery is therefore to treat
-//   the data file as nearest to the "truth".
-//
-// The logic for "recovery/audit" is to open index and read backwards from the
-//   last u64-aligned entry to get to where index and data agree (i.e. where a
-//   successful deserialization of an entry can be performed), then truncate
-//   both files to this syncrhonization point.
-//
 
-// ledger window
 #[derive(Debug)]
 pub struct LedgerWindow {
     index: BufReader<File>,
     data: BufReader<File>,
 }
 
-// use a CONST because there's a cast, and we don't want "sizeof::<u64> as u64"...
+
 const SIZEOF_U64: u64 = size_of::<u64>() as u64;
 
 #[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
@@ -95,8 +56,7 @@ fn u64_at<A: Read + Seek>(file: &mut A, at: u64) -> io::Result<u64> {
 }
 
 impl LedgerWindow {
-    // opens a Ledger in directory, provides "infinite" window
-    //
+
     pub fn open(ledger_path: &str) -> io::Result<Self> {
         let ledger_path = Path::new(&ledger_path);
 
@@ -255,19 +215,7 @@ fn recover_ledger(ledger_path: &str) -> io::Result<()> {
     data.sync_all()
 }
 
-// TODO?? ... we could open the files on demand to support [], but today
-//   LedgerWindow needs "&mut self"
-//
-//impl Index<u64> for LedgerWindow {
-//    type Outx_creatort = io::Result<Entry>;
-//
-//    fn index(&mut self, index: u64) -> &io::Result<Entry> {
-//        match u64_at(&mut self.index, index * SIZEOF_U64) {
-//            Ok(offset) => &entry_at(&mut self.data, offset),
-//            Err(e) => &Err(e),
-//        }
-//    }
-//}
+
 
 #[derive(Debug)]
 pub struct LedgerWriter {
@@ -276,13 +224,13 @@ pub struct LedgerWriter {
 }
 
 impl LedgerWriter {
-    // recover and open the ledger for writing
+
     pub fn recover(ledger_path: &str) -> io::Result<Self> {
         recover_ledger(ledger_path)?;
         LedgerWriter::open(ledger_path, false)
     }
 
-    // opens or creates a LedgerWriter in ledger_path directory
+
     pub fn open(ledger_path: &str, create: bool) -> io::Result<Self> {
         let ledger_path = Path::new(&ledger_path);
 
@@ -465,15 +413,13 @@ pub fn reconstruct_entries_from_blobs(blobs: Vec<SharedBlob>) -> Result<Vec<Entr
     Ok(entries)
 }
 
-/// Creates the next entries for given transactions, outx_creatorts
-/// updates start_hash to id of last Entry, sets num_hashes to 0
+
 pub fn next_entries_mut(
     start_hash: &mut Hash,
     num_hashes: &mut u64,
     transactions: Vec<Transaction>,
 ) -> Vec<Entry> {
-    // TODO: ?? find a number that works better than |?
-    //                                               V
+                                             V
     if transactions.is_empty() || transactions.len() == 1 {
         vec![Entry::new_mut(start_hash, num_hashes, transactions)]
     } else {
@@ -486,7 +432,7 @@ pub fn next_entries_mut(
             let mut lower = chunk_start;
             let mut next = chunk_end; // be optimistic that all will fit
 
-            // binary search for how many transactions will fit in an Entry (i.e. a BLOB)
+     
             loop {
                 debug!(
                     "chunk_end {}, upper {} lower {} next {} transactions.len() {}",
@@ -527,7 +473,7 @@ pub fn next_entries_mut(
     }
 }
 
-/// Creates the next Entries for given transactions
+
 pub fn next_entries(
     start_hash: &Hash,
     num_hashes: u64,
@@ -629,16 +575,7 @@ mod tests {
             Utc::now(),
             one,
         );
-        //
-        // TODO: this magic number and the mix of transaction types
-        //       is designed to fill up a Blob more or less exactly,
-        //       to get near enough the the threshold that
-        //       deserialization falls over if it uses the wrong size()
-        //       parameter to index into blob.data()
-        //
-        // magic numbers -----------------+
-        //                                |
-        //                                V
+
         let mut transactions = vec![tx0; 362];
         transactions.extend(vec![tx1; 100]);
         next_entries(&zero, 0, transactions)

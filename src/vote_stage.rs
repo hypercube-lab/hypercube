@@ -1,5 +1,3 @@
-//! The `vote_stage` votes on the `last_id` of the transaction_processor at a regular cadence
-
 use transaction_processor::TransactionProcessor;
 use bincode::serialize;
 use fin_plan_transaction::FinPlanTransaction;
@@ -35,7 +33,6 @@ pub fn create_new_signed_vote_blob(
     let shared_blob = SharedBlob::default();
     let (vote, addr) = {
         let mut wblockthread = blockthread.write().unwrap();
-        //TODO: doesn't seem like there is a synchronous call to get height and id
         debug!("voting on {:?}", &last_id.as_ref()[..8]);
         wblockthread.new_vote(*last_id)
     }?;
@@ -61,8 +58,6 @@ fn get_last_id_to_vote_on(
 ) -> result::Result<(Hash, u64), VoteError> {
     let mut valid_ids = transaction_processor.count_valid_ids(&ids);
     let super_majority_index = (2 * ids.len()) / 3;
-
-    //TODO(anatoly): this isn't stake based voting
     debug!(
         "{}: valid_ids {}/{} {}",
         id,
@@ -83,7 +78,6 @@ fn get_last_id_to_vote_on(
     if valid_ids.len() > super_majority_index {
         *last_vote = now;
 
-        // Sort by timestamp
         valid_ids.sort_by(|a, b| a.1.cmp(&b.1));
 
         let last_id = ids[valid_ids[super_majority_index].0];
@@ -181,29 +175,26 @@ pub mod tests {
     fn test_send_leader_vote() {
         logger::setup();
 
-        // create a mint/transaction_processor
         let mint = Mint::new(1000);
         let transaction_processor = Arc::new(TransactionProcessor::new(&mint));
         let hash0 = Hash::default();
 
-        // get a non-default hash last_id
+
         let entry = next_entry(&hash0, 1, vec![]);
         transaction_processor.register_entry_id(&entry.id);
 
-        // Create a leader
         let leader_data = NodeInfo::new_with_socketaddr(&"127.0.0.1:1234".parse().unwrap());
         let leader_pubkey = leader_data.id.clone();
         let mut leader_blockthread = BlockThread::new(leader_data).unwrap();
 
-        // give the leader some tokens
+
         let give_leader_tokens_tx =
             Transaction::system_new(&mint.keypair(), leader_pubkey.clone(), 100, entry.id);
         transaction_processor.process_transaction(&give_leader_tokens_tx).unwrap();
 
         leader_blockthread.set_leader(leader_pubkey);
 
-        // Insert 7 agreeing validators / 3 disagreeing
-        // and votes for new last_id
+
         for i in 0..10 {
             let mut validator =
                 NodeInfo::new_with_socketaddr(&format!("127.0.0.1:234{}", i).parse().unwrap());
@@ -240,10 +231,10 @@ pub mod tests {
         let vote_blob = vote_blob_receiver.recv_timeout(Duration::from_millis(500));
         trace!("vote_blob: {:?}", vote_blob);
 
-        // leader shouldn't vote yet, not enough votes
+
         assert!(vote_blob.is_err());
 
-        // add two more nodes and see that it succeeds
+
         for i in 0..2 {
             let mut validator =
                 NodeInfo::new_with_socketaddr(&format!("127.0.0.1:234{}", i).parse().unwrap());
@@ -279,10 +270,8 @@ pub mod tests {
         let vote_blob = vote_blob_receiver.recv_timeout(Duration::from_millis(500));
         trace!("vote_blob: {:?}", vote_blob);
 
-        // leader should vote now
         assert!(vote_blob.is_ok());
 
-        // vote should be valid
         let blob = &vote_blob.unwrap()[0];
         let tx = deserialize(&(blob.read().unwrap().data)).unwrap();
         assert!(transaction_processor.process_transaction(&tx).is_ok());
@@ -297,19 +286,18 @@ pub mod tests {
         let mut last_vote = 0;
         let mut last_valid_validator_timestamp = 0;
 
-        // generate 10 last_ids, register 6 with the transaction_processor
         let ids: Vec<_> = (0..10)
             .map(|i| {
-                let last_id = hash(&serialize(&i).unwrap()); // Unique hash
+                let last_id = hash(&serialize(&i).unwrap()); 
                 if i < 6 {
                     transaction_processor.register_entry_id(&last_id);
                 }
-                // sleep to get a different timestamp in the transaction_processor
+ 
                 sleep(Duration::from_millis(1));
                 last_id
             }).collect();
 
-        // see that we fail to have 2/3rds consensus
+
         assert!(
             get_last_id_to_vote_on(
                 &Pubkey::default(),
@@ -321,7 +309,6 @@ pub mod tests {
             ).is_err()
         );
 
-        // register another, see passing
         transaction_processor.register_entry_id(&ids[6]);
 
         let res = get_last_id_to_vote_on(

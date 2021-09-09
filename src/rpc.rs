@@ -18,7 +18,7 @@ use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 use transaction::Transaction;
-use wallet::request_airdrop;
+use qtc::request_airdrop;
 
 pub const RPC_PORT: u16 = 8899;
 

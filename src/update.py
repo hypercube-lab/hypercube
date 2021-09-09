@@ -1,7 +1,6 @@
 import datetime
 import os
 
-# from heavy import special_commit
 
 
 def modify():

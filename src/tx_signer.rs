@@ -24,17 +24,6 @@ pub struct TxSigner {
 }
 
 impl TxSigner {
-    /// This service receives messages from a leader in the network and processes the transactions
-    /// on the transaction_processor state.
-    /// # Arguments
-    /// * `transaction_processor` - The transaction_processor state.
-    /// * `entry_height` - Initial ledger height, passed to replicate stage
-    /// * `blockthread` - The blockthread state.
-    /// * `window` - The window state.
-    /// * `replicate_socket` - my replicate socket
-    /// * `repair_socket` - my repair socket
-    /// * `retransmit_socket` - my retransmit socket
-    /// * `exit` - The exit signal.
     #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn new(
         keypair: Arc<Keypair>,
@@ -55,9 +44,6 @@ impl TxSigner {
         blob_sockets.push(repair_socket.clone());
         let (fetch_stage, blob_fetch_receiver) =
             BlobFetchStage::new_multi_socket(blob_sockets, exit.clone());
-        //TODO
-        //the packets coming out of blob_receiver need to be sent to the GPU and verified
-        //then sent to the window, which does the erasure coding reconstruction
         let (retransmit_stage, blob_window_receiver) = RetransmitStage::new(
             &blockthread,
             window,
@@ -143,7 +129,6 @@ pub mod tests {
         (ncp, window)
     }
 
-    /// Test that message sent from leader to target1 and replicated to target2
     #[test]
     fn test_replicate() {
         logger::setup();
@@ -153,24 +138,18 @@ pub mod tests {
         let target2 = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
 
-        //start blockthread_leader
         let mut blockthread_l = BlockThread::new(leader.info.clone()).expect("BlockThread::new");
         blockthread_l.set_leader(leader.info.id);
 
         let cref_l = Arc::new(RwLock::new(blockthread_l));
         let dr_l = new_ncp(cref_l, leader.sockets.gossip, exit.clone());
 
-        //start blockthread2
         let mut blockthread2 = BlockThread::new(target2.info.clone()).expect("BlockThread::new");
         blockthread2.insert(&leader.info);
         blockthread2.set_leader(leader.info.id);
         let leader_id = leader.info.id;
         let cref2 = Arc::new(RwLock::new(blockthread2));
         let dr_2 = new_ncp(cref2, target2.sockets.gossip, exit.clone());
-
-        // setup some blob services to send blobs into the socket
-        // to simulate the source peer and get blobs out of the socket to
-        // simulate target peer
         let (s_reader, r_reader) = channel();
         let blob_sockets: Vec<Arc<UdpSocket>> = target2
             .sockets
@@ -181,7 +160,6 @@ pub mod tests {
 
         let t_receiver = streamer::blob_receiver(blob_sockets[0].clone(), exit.clone(), s_reader);
 
-        // simulate leader sending messages
         let (s_responder, r_responder) = channel();
         let t_responder = streamer::responder(
             "test_replicate",
@@ -194,7 +172,6 @@ pub mod tests {
         let replicate_addr = target1.info.contact_info.tx_signer;
         let transaction_processor = Arc::new(TransactionProcessor::new(&mint));
 
-        //start blockthread1
         let mut blockthread1 = BlockThread::new(target1.info.clone()).expect("BlockThread::new");
         blockthread1.insert(&leader.info);
         blockthread1.set_leader(leader.info.id);
@@ -257,11 +234,9 @@ pub mod tests {
             }
         }
 
-        // send the blobs into the socket
         s_responder.send(msgs).expect("send");
         drop(s_responder);
 
-        // receive retransmitted messages
         let timer = Duration::new(1, 0);
         while let Ok(_msg) = r_reader.recv_timeout(timer) {
             trace!("got msg");

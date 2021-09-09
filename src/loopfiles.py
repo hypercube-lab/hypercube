@@ -1,5 +1,7 @@
 import os
 
+# this script loop through all files in thec
+
 def loopfile():
     directory = os.getcwd()
     for filename in os.listdir(directory):

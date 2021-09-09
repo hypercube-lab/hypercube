@@ -1,8 +1,3 @@
-//! The `thin_client` module is a client-side object that interfaces with
-//! a server-side TPU.  Client code should use this object instead of writing
-//! messages to the network directly. The binary encoding of its messages are
-//! unstable and may change in future releases.
-
 use transaction_processor::TransactionProcessor;
 use bincode::{deserialize, serialize};
 use blockthread::{BlockThread, BlockThreadError, NodeInfo};
@@ -30,7 +25,6 @@ use transaction::Transaction;
 use influx_db_client as influxdb;
 use metrics;
 
-/// An object for querying and sending transactions to the network.
 pub struct ThinClient {
     requests_addr: SocketAddr,
     requests_socket: UdpSocket,
@@ -44,9 +38,6 @@ pub struct ThinClient {
 }
 
 impl ThinClient {
-    /// Create a new ThinClient that will interface with Rpu
-    /// over `requests_socket` and `transactions_socket`. To receive responses, the caller must bind `socket`
-    /// to a public address before invoking ThinClient methods.
     pub fn new(
         requests_addr: SocketAddr,
         requests_socket: UdpSocket,
@@ -118,8 +109,6 @@ impl ThinClient {
         }
     }
 
-    /// Send a signed Transaction to the server for processing. This method
-    /// does not wait for a response.
     pub fn transfer_signed(&self, tx: &Transaction) -> io::Result<Signature> {
         let data = serialize(&tx).expect("serialize Transaction in pub fn transfer_signed");
         self.transactions_socket
@@ -127,7 +116,6 @@ impl ThinClient {
         Ok(tx.signature)
     }
 
-    /// Retry a sending a signed Transaction to the server for processing.
     pub fn retry_transfer_signed(
         &mut self,
         tx: &Transaction,
@@ -148,7 +136,7 @@ impl ThinClient {
         ))
     }
 
-    /// Creates, signs, and processes a Transaction. Useful for writing unit-tests.
+    
     pub fn transfer(
         &self,
         n: i64,
@@ -170,9 +158,7 @@ impl ThinClient {
         result
     }
 
-    /// Request the balance of the user holding `pubkey`. This method blocks
-    /// until the server sends a response. If the response packet is dropped
-    /// by the network, this method will hang indefinitely.
+    
     pub fn get_balance(&mut self, pubkey: &Pubkey) -> io::Result<i64> {
         trace!("get_balance sending request to {}", self.requests_addr);
         let req = Request::GetAccount { key: *pubkey };
@@ -190,15 +176,13 @@ impl ThinClient {
             self.process_response(&resp);
         }
         trace!("get_balance {:?}", self.balances.get(pubkey));
-        // TODO: This is a hard coded call to introspect the balance of a fin_plan_dsl contract
-        // In the future custom contracts would need their own introspection
+        
         self.balances
             .get(pubkey)
             .map(TransactionProcessor::read_balance)
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "AccountNotFound"))
     }
 
-    /// Request the finality from the leader node
     pub fn get_finality(&mut self) -> usize {
         trace!("get_finality");
         let req = Request::GetFinality;
@@ -225,8 +209,7 @@ impl ThinClient {
         self.finality.expect("some finality")
     }
 
-    /// Request the transaction count.  If the response packet is dropped by the network,
-    /// this method will try again 5 times.
+    
     pub fn transaction_count(&mut self) -> u64 {
         debug!("transaction_count");
         let req = Request::GetTransactionCount;
@@ -251,8 +234,7 @@ impl ThinClient {
         self.transaction_count
     }
 
-    /// Request the last Entry ID from the server. This method blocks
-    /// until the server sends a response.
+    
     pub fn get_last_id(&mut self) -> Hash {
         trace!("get_last_id");
         let req = Request::GetLastId;
@@ -318,7 +300,7 @@ impl ThinClient {
         self.poll_balance_with_timeout(pubkey, &Duration::from_millis(100), &Duration::from_secs(1))
     }
 
-    /// Poll the server to confirm a transaction.
+
     pub fn poll_for_signature(&mut self, signature: &Signature) -> io::Result<()> {
         let now = Instant::now();
         while !self.check_signature(signature) {
@@ -331,8 +313,7 @@ impl ThinClient {
         Ok(())
     }
 
-    /// Check a signature in the transaction_processor. This method blocks
-    /// until the server sends a response.
+
     pub fn check_signature(&mut self, signature: &Signature) -> bool {
         trace!("check_signature");
         let req = Request::GetSignature {
@@ -389,7 +370,7 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
         None => Duration::new(std::u64::MAX, 0),
     };
     let now = Instant::now();
-    // Block until leader's correct contact info is received
+
     let leader;
 
     loop {
@@ -517,7 +498,7 @@ mod tests {
             None,
             Some(0),
         );
-        //TODO: remove this sleep, or add a retry so CI is stable
+
         sleep(Duration::from_millis(300));
 
         let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -603,7 +584,7 @@ mod tests {
 
     #[test]
     fn test_transaction_count() {
-        // set a bogus address, see that we don't hang
+
         logger::setup();
         let addr = "0.0.0.0:1234".parse().unwrap();
         let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();

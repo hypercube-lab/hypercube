@@ -58,8 +58,8 @@ name = "hypercube-keygen"
 path = "src/bin/keygen.rs"
 
 [[bin]]
-name = "hypercube-wallet"
-path = "src/bin/wallet.rs"
+name = "hypercube-qtc"
+path = "src/bin/qtc.rs"
 
 [badges]
 codecov = { repository = "hypercube-labs/hypercube", branch = "master", service = "github" }

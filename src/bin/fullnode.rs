@@ -16,7 +16,7 @@ use hypercube::logger;
 use hypercube::metrics::set_panic_hook;
 use hypercube::signature::{Keypair, KeypairUtil};
 use hypercube::thin_client::poll_gossip_for_leader;
-use hypercube::wallet::request_airdrop;
+use hypercube::qtc::request_airdrop;
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;

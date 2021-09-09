@@ -28,13 +28,12 @@ use builtin_tansaction::SystemTransaction;
 use transaction::Transaction;
 
 #[derive(Debug, PartialEq)]
-pub enum WalletCommand {
+pub enum QtcCommand {
     Address,
     AirDrop(i64),
     Balance,
     Cancel(Pubkey),
     Confirm(Signature),
-    // Pay(tokens, to, timestamp, timestamp_pubkey, witness(es), cancelable)
     Pay(
         i64,
         Pubkey,
@@ -43,53 +42,53 @@ pub enum WalletCommand {
         Option<Vec<Pubkey>>,
         Option<Pubkey>,
     ),
-    // TimeElapsed(to, process_id, timestamp)
+
     TimeElapsed(Pubkey, Pubkey, DateTime<Utc>),
-    // Witness(to, process_id)
+
     Witness(Pubkey, Pubkey),
 }
 
 #[derive(Debug, Clone)]
-pub enum WalletError {
+pub enum QtcError {
     CommandNotRecognized(String),
     BadParameter(String),
     RpcRequestError(String),
 }
 
-impl fmt::Display for WalletError {
+impl fmt::Display for QtcError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "invalid")
     }
 }
 
-impl error::Error for WalletError {
+impl error::Error for QtcError {
     fn description(&self) -> &str {
         "invalid"
     }
 
     fn cause(&self) -> Option<&error::Error> {
-        // Generic error, underlying cause isn't tracked.
+
         None
     }
 }
 
-pub struct WalletConfig {
+pub struct QtcConfig {
     pub leader: NodeInfo,
     pub id: Keypair,
     pub faucet_addr: SocketAddr,
     pub rpc_addr: String,
-    pub command: WalletCommand,
+    pub command: QtcCommand,
 }
 
-impl Default for WalletConfig {
-    fn default() -> WalletConfig {
+impl Default for QtcConfig {
+    fn default() -> QtcConfig {
         let default_addr = socketaddr!(0, 8000);
-        WalletConfig {
+        QtcConfig {
             leader: NodeInfo::new_with_socketaddr(&default_addr),
             id: Keypair::new(),
             faucet_addr: default_addr,
             rpc_addr: default_addr.to_string(),
-            command: WalletCommand::Balance,
+            command: QtcCommand::Balance,
         }
     }
 }
@@ -97,14 +96,14 @@ impl Default for WalletConfig {
 pub fn parse_command(
     pubkey: Pubkey,
     matches: &ArgMatches,
-) -> Result<WalletCommand, Box<error::Error>> {
+) -> Result<QtcCommand, Box<error::Error>> {
     let response = match matches.subcommand() {
-        ("address", Some(_address_matches)) => Ok(WalletCommand::Address),
+        ("address", Some(_address_matches)) => Ok(QtcCommand::Address),
         ("airdrop", Some(airdrop_matches)) => {
             let tokens = airdrop_matches.value_of("tokens").unwrap().parse()?;
-            Ok(WalletCommand::AirDrop(tokens))
+            Ok(QtcCommand::AirDrop(tokens))
         }
-        ("balance", Some(_balance_matches)) => Ok(WalletCommand::Balance),
+        ("balance", Some(_balance_matches)) => Ok(QtcCommand::Balance),
         ("cancel", Some(cancel_matches)) => {
             let pubkey_vec = bs58::decode(cancel_matches.value_of("process-id").unwrap())
                 .into_vec()
@@ -112,10 +111,10 @@ pub fn parse_command(
 
             if pubkey_vec.len() != mem::size_of::<Pubkey>() {
                 eprintln!("{}", cancel_matches.usage());
-                Err(WalletError::BadParameter("Invalid public key".to_string()))?;
+                Err(QtcError::BadParameter("Invalid public key".to_string()))?;
             }
             let process_id = Pubkey::new(&pubkey_vec);
-            Ok(WalletCommand::Cancel(process_id))
+            Ok(QtcCommand::Cancel(process_id))
         }
         ("confirm", Some(confirm_matches)) => {
             let signatures = bs58::decode(confirm_matches.value_of("signature").unwrap())
@@ -124,10 +123,10 @@ pub fn parse_command(
 
             if signatures.len() == mem::size_of::<Signature>() {
                 let signature = Signature::new(&signatures);
-                Ok(WalletCommand::Confirm(signature))
+                Ok(QtcCommand::Confirm(signature))
             } else {
                 eprintln!("{}", confirm_matches.usage());
-                Err(WalletError::BadParameter("Invalid signature".to_string()))
+                Err(QtcError::BadParameter("Invalid signature".to_string()))
             }
         }
         ("pay", Some(pay_matches)) => {
@@ -139,7 +138,7 @@ pub fn parse_command(
 
                 if pubkey_vec.len() != mem::size_of::<Pubkey>() {
                     eprintln!("{}", pay_matches.usage());
-                    Err(WalletError::BadParameter(
+                    Err(QtcError::BadParameter(
                         "Invalid to public key".to_string(),
                     ))?;
                 }
@@ -148,7 +147,7 @@ pub fn parse_command(
                 pubkey
             };
             let timestamp = if pay_matches.is_present("timestamp") {
-                // Parse input for serde_json
+
                 let date_string = if !pay_matches.value_of("timestamp").unwrap().contains('Z') {
                     format!("\"{}Z\"", pay_matches.value_of("timestamp").unwrap())
                 } else {
@@ -165,7 +164,7 @@ pub fn parse_command(
 
                 if pubkey_vec.len() != mem::size_of::<Pubkey>() {
                     eprintln!("{}", pay_matches.usage());
-                    Err(WalletError::BadParameter(
+                    Err(QtcError::BadParameter(
                         "Invalid timestamp public key".to_string(),
                     ))?;
                 }
@@ -183,7 +182,7 @@ pub fn parse_command(
 
                     if pubkey_vec.len() != mem::size_of::<Pubkey>() {
                         eprintln!("{}", pay_matches.usage());
-                        Err(WalletError::BadParameter(
+                        Err(QtcError::BadParameter(
                             "Invalid witness public key".to_string(),
                         ))?;
                     }
@@ -199,7 +198,7 @@ pub fn parse_command(
                 None
             };
 
-            Ok(WalletCommand::Pay(
+            Ok(QtcCommand::Pay(
                 tokens,
                 to,
                 timestamp,
@@ -215,7 +214,7 @@ pub fn parse_command(
 
             if pubkey_vec.len() != mem::size_of::<Pubkey>() {
                 eprintln!("{}", sig_matches.usage());
-                Err(WalletError::BadParameter("Invalid public key".to_string()))?;
+                Err(QtcError::BadParameter("Invalid public key".to_string()))?;
             }
             let to = Pubkey::new(&pubkey_vec);
 
@@ -225,10 +224,10 @@ pub fn parse_command(
 
             if pubkey_vec.len() != mem::size_of::<Pubkey>() {
                 eprintln!("{}", sig_matches.usage());
-                Err(WalletError::BadParameter("Invalid public key".to_string()))?;
+                Err(QtcError::BadParameter("Invalid public key".to_string()))?;
             }
             let process_id = Pubkey::new(&pubkey_vec);
-            Ok(WalletCommand::Witness(to, process_id))
+            Ok(QtcCommand::Witness(to, process_id))
         }
         ("send-timestamp", Some(timestamp_matches)) => {
             let pubkey_vec = bs58::decode(timestamp_matches.value_of("to").unwrap())
@@ -237,7 +236,7 @@ pub fn parse_command(
 
             if pubkey_vec.len() != mem::size_of::<Pubkey>() {
                 eprintln!("{}", timestamp_matches.usage());
-                Err(WalletError::BadParameter("Invalid public key".to_string()))?;
+                Err(QtcError::BadParameter("Invalid public key".to_string()))?;
             }
             let to = Pubkey::new(&pubkey_vec);
 
@@ -247,7 +246,7 @@ pub fn parse_command(
 
             if pubkey_vec.len() != mem::size_of::<Pubkey>() {
                 eprintln!("{}", timestamp_matches.usage());
-                Err(WalletError::BadParameter("Invalid public key".to_string()))?;
+                Err(QtcError::BadParameter("Invalid public key".to_string()))?;
             }
             let process_id = Pubkey::new(&pubkey_vec);
             let dt = if timestamp_matches.is_present("datetime") {
@@ -265,11 +264,11 @@ pub fn parse_command(
             } else {
                 Utc::now()
             };
-            Ok(WalletCommand::TimeElapsed(to, process_id, dt))
+            Ok(QtcCommand::TimeElapsed(to, process_id, dt))
         }
         ("", None) => {
             eprintln!("{}", matches.usage());
-            Err(WalletError::CommandNotRecognized(
+            Err(QtcError::CommandNotRecognized(
                 "no subcommand given".to_string(),
             ))
         }
@@ -278,35 +277,34 @@ pub fn parse_command(
     Ok(response)
 }
 
-pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error>> {
+pub fn process_command(config: &QtcConfig) -> Result<String, Box<error::Error>> {
     match config.command {
-        // Get address of this client
-        WalletCommand::Address => Ok(format!("{}", config.id.pubkey())),
-        // Request an airdrop from HyperCube Drone;
-        WalletCommand::AirDrop(tokens) => {
+
+        QtcCommand::Address => Ok(format!("{}", config.id.pubkey())),
+
+        QtcCommand::AirDrop(tokens) => {
             println!(
                 "Requesting airdrop of {:?} tokens from {}",
                 tokens, config.faucet_addr
             );
             let params = json!(format!("{}", config.id.pubkey()));
-            let previous_balance = match WalletRpcRequest::GetBalance
+            let previous_balance = match QtcRpcRequest::GetBalance
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
                 .as_i64()
             {
                 Some(tokens) => tokens,
-                None => Err(WalletError::RpcRequestError(
+                None => Err(QtcError::RpcRequestError(
                     "Received result of an unexpected type".to_string(),
                 ))?,
             };
             request_airdrop(&config.faucet_addr, &config.id.pubkey(), tokens as u64)?;
 
-            // TODO: return airdrop Result from Drone instead of polling the
-            //       network
+
             let mut current_balance = previous_balance;
             for _ in 0..20 {
                 sleep(Duration::from_millis(500));
                 let params = json!(format!("{}", config.id.pubkey()));
-                current_balance = WalletRpcRequest::GetBalance
+                current_balance = QtcRpcRequest::GetBalance
                     .make_rpc_request(&config.rpc_addr, 1, Some(params))?
                     .as_i64()
                     .unwrap_or(previous_balance);
@@ -321,23 +319,23 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             }
             Ok(format!("Your balance is: {:?}", current_balance))
         }
-        // Check client balance
-        WalletCommand::Balance => {
+
+        QtcCommand::Balance => {
             println!("Balance requested...");
             let params = json!(format!("{}", config.id.pubkey()));
-            let balance = WalletRpcRequest::GetBalance
+            let balance = QtcRpcRequest::GetBalance
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
                 .as_i64();
             match balance {
                 Some(0) => Ok("No account found! Request an airdrop to get started.".to_string()),
                 Some(tokens) => Ok(format!("Your balance is: {:?}", tokens)),
-                None => Err(WalletError::RpcRequestError(
+                None => Err(QtcError::RpcRequestError(
                     "Received result of an unexpected type".to_string(),
                 ))?,
             }
         }
-        // Cancel a contract by contract Pubkey
-        WalletCommand::Cancel(pubkey) => {
+
+        QtcCommand::Cancel(pubkey) => {
             let last_id = get_last_id(&config)?;
 
             let tx =
@@ -346,10 +344,10 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
 
             Ok(signature_str.to_string())
         }
-        // Confirm the last client transaction by signature
-        WalletCommand::Confirm(signature) => {
+
+        QtcCommand::Confirm(signature) => {
             let params = json!(format!("{}", signature));
-            let confirmation = WalletRpcRequest::ConfirmTransaction
+            let confirmation = QtcRpcRequest::ConfirmTransaction
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
                 .as_bool();
             match confirmation {
@@ -360,13 +358,13 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                         Ok("Not found".to_string())
                     }
                 }
-                None => Err(WalletError::RpcRequestError(
+                None => Err(QtcError::RpcRequestError(
                     "Received result of an unexpected type".to_string(),
                 ))?,
             }
         }
-        // If client has positive balance, pay tokens to another address
-        WalletCommand::Pay(tokens, to, timestamp, timestamp_pubkey, ref witnesses, cancelable) => {
+
+        QtcCommand::Pay(tokens, to, timestamp, timestamp_pubkey, ref witnesses, cancelable) => {
             let last_id = get_last_id(&config)?;
 
             if timestamp == None && *witnesses == None {
@@ -384,7 +382,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 let contract_state = Keypair::new();
                 let fin_plan_program_id = FinPlanState::id();
 
-                // Create account for contract funds
+
                 let tx = Transaction::system_create(
                     &config.id,
                     contract_funds.pubkey(),
@@ -396,7 +394,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 );
                 let _signature_str = serialize_and_send_tx(&config, &tx)?;
 
-                // Create account for contract state
+
                 let tx = Transaction::system_create(
                     &config.id,
                     contract_state.pubkey(),
@@ -408,7 +406,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 );
                 let _signature_str = serialize_and_send_tx(&config, &tx)?;
 
-                // Initializing contract
+
                 let tx = Transaction::fin_plan_new_on_date(
                     &contract_funds,
                     to,
@@ -431,7 +429,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 let witness = if let Some(ref witness_vec) = *witnesses {
                     witness_vec[0]
                 } else {
-                    Err(WalletError::BadParameter(
+                    Err(QtcError::BadParameter(
                         "Could not parse required signature pubkey(s)".to_string(),
                     ))?
                 };
@@ -440,7 +438,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 let contract_state = Keypair::new();
                 let fin_plan_program_id = FinPlanState::id();
 
-                // Create account for contract funds
+  
                 let tx = Transaction::system_create(
                     &config.id,
                     contract_funds.pubkey(),
@@ -452,7 +450,6 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 );
                 let _signature_str = serialize_and_send_tx(&config, &tx)?;
 
-                // Create account for contract state
                 let tx = Transaction::system_create(
                     &config.id,
                     contract_state.pubkey(),
@@ -464,7 +461,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 );
                 let _signature_str = serialize_and_send_tx(&config, &tx)?;
 
-                // Initializing contract
+
                 let tx = Transaction::fin_plan_new_when_signed(
                     &contract_funds,
                     to,
@@ -484,10 +481,10 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 Ok("Combo transactions not yet handled".to_string())
             }
         }
-        // Apply time elapsed to contract
-        WalletCommand::TimeElapsed(to, pubkey, dt) => {
+
+        QtcCommand::TimeElapsed(to, pubkey, dt) => {
             let params = json!(format!("{}", config.id.pubkey()));
-            let balance = WalletRpcRequest::GetBalance
+            let balance = QtcRpcRequest::GetBalance
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
                 .as_i64();
             if let Some(0) = balance {
@@ -501,12 +498,12 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
 
             Ok(signature_str.to_string())
         }
-        // Apply witness signature to contract
-        WalletCommand::Witness(to, pubkey) => {
+
+        QtcCommand::Witness(to, pubkey) => {
             let last_id = get_last_id(&config)?;
 
             let params = json!(format!("{}", config.id.pubkey()));
-            let balance = WalletRpcRequest::GetBalance
+            let balance = QtcRpcRequest::GetBalance
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
                 .as_i64();
             if let Some(0) = balance {
@@ -521,16 +518,16 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
     }
 }
 
-pub fn read_leader(path: &str) -> Result<Config, WalletError> {
+pub fn read_leader(path: &str) -> Result<Config, QtcError> {
     let file = File::open(path.to_string()).or_else(|err| {
-        Err(WalletError::BadParameter(format!(
+        Err(QtcError::BadParameter(format!(
             "{}: Unable to open leader file: {}",
             err, path
         )))
     })?;
 
     serde_json::from_reader(file).or_else(|err| {
-        Err(WalletError::BadParameter(format!(
+        Err(QtcError::BadParameter(format!(
             "{}: Failed to parse leader file: {}",
             err, path
         )))
@@ -579,7 +576,7 @@ pub fn gen_keypair_file(outfile: String) -> Result<String, Box<error::Error>> {
     Ok(serialized)
 }
 
-pub enum WalletRpcRequest {
+pub enum QtcRpcRequest {
     ConfirmTransaction,
     GetAccountInfo,
     GetBalance,
@@ -589,7 +586,7 @@ pub enum WalletRpcRequest {
     RequestAirdrop,
     SendTransaction,
 }
-impl WalletRpcRequest {
+impl QtcRpcRequest {
     fn make_rpc_request(
         &self,
         rpc_addr: &str,
@@ -598,14 +595,14 @@ impl WalletRpcRequest {
     ) -> Result<Value, Box<error::Error>> {
         let jsonrpc = "2.0";
         let method = match self {
-            WalletRpcRequest::ConfirmTransaction => "confirmTransaction",
-            WalletRpcRequest::GetAccountInfo => "getAccountInfo",
-            WalletRpcRequest::GetBalance => "getBalance",
-            WalletRpcRequest::GetFinality => "getFinality",
-            WalletRpcRequest::GetLastId => "getLastId",
-            WalletRpcRequest::GetTransactionCount => "getTransactionCount",
-            WalletRpcRequest::RequestAirdrop => "requestAirdrop",
-            WalletRpcRequest::SendTransaction => "sendTransaction",
+            QtcRpcRequest::ConfirmTransaction => "confirmTransaction",
+            QtcRpcRequest::GetAccountInfo => "getAccountInfo",
+            QtcRpcRequest::GetBalance => "getBalance",
+            QtcRpcRequest::GetFinality => "getFinality",
+            QtcRpcRequest::GetLastId => "getLastId",
+            QtcRpcRequest::GetTransactionCount => "getTransactionCount",
+            QtcRpcRequest::RequestAirdrop => "requestAirdrop",
+            QtcRpcRequest::SendTransaction => "sendTransaction",
         };
         let client = reqwest::Client::new();
         let mut request = json!({
@@ -623,7 +620,7 @@ impl WalletRpcRequest {
             .send()?;
         let json: Value = serde_json::from_str(&response.text()?)?;
         if json["error"].is_object() {
-            Err(WalletError::RpcRequestError(format!(
+            Err(QtcError::RpcRequestError(format!(
                 "RPC Error response: {}",
                 serde_json::to_string(&json["error"]).unwrap()
             )))?
@@ -632,30 +629,30 @@ impl WalletRpcRequest {
     }
 }
 
-fn get_last_id(config: &WalletConfig) -> Result<Hash, Box<error::Error>> {
-    let result = WalletRpcRequest::GetLastId.make_rpc_request(&config.rpc_addr, 1, None)?;
+fn get_last_id(config: &QtcConfig) -> Result<Hash, Box<error::Error>> {
+    let result = QtcRpcRequest::GetLastId.make_rpc_request(&config.rpc_addr, 1, None)?;
     if result.as_str().is_none() {
-        Err(WalletError::RpcRequestError(
+        Err(QtcError::RpcRequestError(
             "Received bad last_id".to_string(),
         ))?
     }
     let last_id_str = result.as_str().unwrap();
     let last_id_vec = bs58::decode(last_id_str)
         .into_vec()
-        .map_err(|_| WalletError::RpcRequestError("Received bad last_id".to_string()))?;
+        .map_err(|_| QtcError::RpcRequestError("Received bad last_id".to_string()))?;
     Ok(Hash::new(&last_id_vec))
 }
 
 fn serialize_and_send_tx(
-    config: &WalletConfig,
+    config: &QtcConfig,
     tx: &Transaction,
 ) -> Result<String, Box<error::Error>> {
     let serialized = serialize(tx).unwrap();
     let params = json!(serialized);
     let signature =
-        WalletRpcRequest::SendTransaction.make_rpc_request(&config.rpc_addr, 2, Some(params))?;
+        QtcRpcRequest::SendTransaction.make_rpc_request(&config.rpc_addr, 2, Some(params))?;
     if signature.as_str().is_none() {
-        Err(WalletError::RpcRequestError(
+        Err(QtcError::RpcRequestError(
             "Received result of an unexpected type".to_string(),
         ))?
     }
@@ -690,7 +687,7 @@ mod tests {
     }
 
     #[test]
-    fn test_wallet_parse_command() {
+    fn test_qtc_parse_command() {
         let test_commands = App::new("test")
             .subcommand(SubCommand::with_name("address").about("Get your public key"))
             .subcommand(
@@ -821,30 +818,30 @@ mod tests {
         let witness1_string = format!("{}", witness1);
         let dt = Utc.ymd(2018, 9, 19).and_hms(17, 30, 59);
 
-        // Test Airdrop Subcommand
+
         let test_airdrop = test_commands
             .clone()
             .get_matches_from(vec!["test", "airdrop", "50"]);
         assert_eq!(
             parse_command(pubkey, &test_airdrop).unwrap(),
-            WalletCommand::AirDrop(50)
+            QtcCommand::AirDrop(50)
         );
         let test_bad_airdrop = test_commands
             .clone()
             .get_matches_from(vec!["test", "airdrop", "notint"]);
         assert!(parse_command(pubkey, &test_bad_airdrop).is_err());
 
-        // Test Cancel Subcommand
         let test_cancel =
             test_commands
                 .clone()
                 .get_matches_from(vec!["test", "cancel", &pubkey_string]);
         assert_eq!(
             parse_command(pubkey, &test_cancel).unwrap(),
-            WalletCommand::Cancel(pubkey)
+            QtcCommand::Cancel(pubkey)
         );
 
-        // Test Confirm Subcommand
+
+
         let signature = Signature::new(&vec![1; 64]);
         let signature_string = format!("{:?}", signature);
         let test_confirm =
@@ -853,28 +850,27 @@ mod tests {
                 .get_matches_from(vec!["test", "confirm", &signature_string]);
         assert_eq!(
             parse_command(pubkey, &test_confirm).unwrap(),
-            WalletCommand::Confirm(signature)
+            QtcCommand::Confirm(signature)
         );
         let test_bad_signature = test_commands
             .clone()
             .get_matches_from(vec!["test", "confirm", "deadbeef"]);
         assert!(parse_command(pubkey, &test_bad_signature).is_err());
 
-        // Test Simple Pay Subcommand
         let test_pay =
             test_commands
                 .clone()
                 .get_matches_from(vec!["test", "pay", &pubkey_string, "50"]);
         assert_eq!(
             parse_command(pubkey, &test_pay).unwrap(),
-            WalletCommand::Pay(50, pubkey, None, None, None, None)
+            QtcCommand::Pay(50, pubkey, None, None, None, None)
         );
         let test_bad_pubkey = test_commands
             .clone()
             .get_matches_from(vec!["test", "pay", "deadbeef", "50"]);
         assert!(parse_command(pubkey, &test_bad_pubkey).is_err());
 
-        // Test Pay Subcommand w/ Witness
+
         let test_pay_multiple_witnesses = test_commands.clone().get_matches_from(vec![
             "test",
             "pay",
@@ -887,7 +883,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(pubkey, &test_pay_multiple_witnesses).unwrap(),
-            WalletCommand::Pay(50, pubkey, None, None, Some(vec![witness0, witness1]), None)
+            QtcCommand::Pay(50, pubkey, None, None, Some(vec![witness0, witness1]), None)
         );
         let test_pay_single_witness = test_commands.clone().get_matches_from(vec![
             "test",
@@ -899,10 +895,10 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(pubkey, &test_pay_single_witness).unwrap(),
-            WalletCommand::Pay(50, pubkey, None, None, Some(vec![witness0]), None)
+            QtcCommand::Pay(50, pubkey, None, None, Some(vec![witness0]), None)
         );
 
-        // Test Pay Subcommand w/ Timestamp
+
         let test_pay_timestamp = test_commands.clone().get_matches_from(vec![
             "test",
             "pay",
@@ -915,10 +911,10 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(pubkey, &test_pay_timestamp).unwrap(),
-            WalletCommand::Pay(50, pubkey, Some(dt), Some(witness0), None, None)
+            QtcCommand::Pay(50, pubkey, Some(dt), Some(witness0), None, None)
         );
 
-        // Test Send-Signature Subcommand
+
         let test_send_signature = test_commands.clone().get_matches_from(vec![
             "test",
             "send-signature",
@@ -927,7 +923,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(pubkey, &test_send_signature).unwrap(),
-            WalletCommand::Witness(pubkey, pubkey)
+            QtcCommand::Witness(pubkey, pubkey)
         );
         let test_pay_multiple_witnesses = test_commands.clone().get_matches_from(vec![
             "test",
@@ -945,7 +941,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(pubkey, &test_pay_multiple_witnesses).unwrap(),
-            WalletCommand::Pay(
+            QtcCommand::Pay(
                 50,
                 pubkey,
                 Some(dt),
@@ -955,7 +951,7 @@ mod tests {
             )
         );
 
-        // Test Send-Timestamp Subcommand
+
         let test_send_timestamp = test_commands.clone().get_matches_from(vec![
             "test",
             "send-timestamp",
@@ -966,7 +962,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(pubkey, &test_send_timestamp).unwrap(),
-            WalletCommand::TimeElapsed(pubkey, pubkey, dt)
+            QtcCommand::TimeElapsed(pubkey, pubkey, dt)
         );
         let test_bad_timestamp = test_commands.clone().get_matches_from(vec![
             "test",
@@ -980,7 +976,7 @@ mod tests {
     }
     #[test]
     #[ignore]
-    fn test_wallet_process_command() {
+    fn test_qtc_process_command() {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
@@ -989,9 +985,9 @@ mod tests {
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
-        let ledger_path = tmp_ledger("wallet_process_command", &alice);
+        let ledger_path = tmp_ledger("qtc_process_command", &alice);
 
-        let mut config = WalletConfig::default();
+        let mut config = QtcConfig::default();
         let rpc_port = 12345; // Needs to be distinct known number to not conflict with other tests
 
         let server = Fullnode::new_with_transaction_processor(
@@ -1018,25 +1014,25 @@ mod tests {
         config.rpc_addr = format!("http://{}", rpc_addr.to_string());
 
         let tokens = 50;
-        config.command = WalletCommand::AirDrop(tokens);
+        config.command = QtcCommand::AirDrop(tokens);
         assert_eq!(
             process_command(&config).unwrap(),
             format!("Your balance is: {:?}", tokens)
         );
 
-        config.command = WalletCommand::Balance;
+        config.command = QtcCommand::Balance;
         assert_eq!(
             process_command(&config).unwrap(),
             format!("Your balance is: {:?}", tokens)
         );
 
-        config.command = WalletCommand::Address;
+        config.command = QtcCommand::Address;
         assert_eq!(
             process_command(&config).unwrap(),
             format!("{}", config.id.pubkey())
         );
 
-        config.command = WalletCommand::Pay(10, bob_pubkey, None, None, None, None);
+        config.command = QtcCommand::Pay(10, bob_pubkey, None, None, None, None);
         let sig_response = process_command(&config);
         assert!(sig_response.is_ok());
 
@@ -1044,10 +1040,10 @@ mod tests {
             .into_vec()
             .expect("base58-encoded signature");
         let signature = Signature::new(&signatures);
-        config.command = WalletCommand::Confirm(signature);
+        config.command = QtcCommand::Confirm(signature);
         assert_eq!(process_command(&config).unwrap(), "Confirmed");
 
-        config.command = WalletCommand::Balance;
+        config.command = QtcCommand::Balance;
         assert_eq!(
             process_command(&config).unwrap(),
             format!("Your balance is: {:?}", tokens - 10)
@@ -1057,7 +1053,7 @@ mod tests {
         remove_dir_all(ledger_path).unwrap();
     }
     #[test]
-    fn test_wallet_request_airdrop() {
+    fn test_qtc_request_airdrop() {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
@@ -1065,10 +1061,9 @@ mod tests {
         let transaction_processor = TransactionProcessor::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
-        let ledger_path = tmp_ledger("wallet_request_airdrop", &alice);
+        let ledger_path = tmp_ledger("qtc_request_airdrop", &alice);
 
-        let rpc_port = 11111; // Needs to be distinct known number to not conflict with other tests
-
+        let rpc_port = 11111; 
         let server = Fullnode::new_with_transaction_processor(
             leader_keypair,
             transaction_processor,
@@ -1094,7 +1089,7 @@ mod tests {
         let signature = request_airdrop(&faucet_addr, &bob_pubkey, 50);
         assert!(signature.is_ok());
         let params = json!(format!("{}", signature.unwrap()));
-        let confirmation = WalletRpcRequest::ConfirmTransaction
+        let confirmation = QtcRpcRequest::ConfirmTransaction
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
             .as_bool()
@@ -1105,7 +1100,7 @@ mod tests {
         remove_dir_all(ledger_path).unwrap();
     }
     #[test]
-    fn test_wallet_gen_keypair_file() {
+    fn test_qtc_gen_keypair_file() {
         let outfile = "test_gen_keypair_file.json";
         let serialized_keypair = gen_keypair_file(outfile.to_string()).unwrap();
         let keypair_vec: Vec<u8> = serde_json::from_str(&serialized_keypair).unwrap();
@@ -1121,7 +1116,7 @@ mod tests {
     }
     #[test]
     #[ignore]
-    fn test_wallet_timestamp_tx() {
+    fn test_qtc_timestamp_tx() {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
@@ -1131,12 +1126,11 @@ mod tests {
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
         let leader_data2 = leader.info.clone();
-        let ledger_path = tmp_ledger("wallet_timestamp_tx", &alice);
+        let ledger_path = tmp_ledger("qtc_timestamp_tx", &alice);
 
-        let mut config_payer = WalletConfig::default();
-        let mut config_witness = WalletConfig::default();
-        let rpc_port = 13579; // Needs to be distinct known number to not conflict with other tests
-
+        let mut config_payer = QtcConfig::default();
+        let mut config_witness = QtcConfig::default();
+        let rpc_port = 13579; 
         let server = Fullnode::new_with_transaction_processor(
             leader_keypair,
             transaction_processor,
@@ -1167,10 +1161,9 @@ mod tests {
 
         let _signature = request_airdrop(&config_payer.faucet_addr, &config_payer.id.pubkey(), 50);
 
-        // Make transaction (from config_payer to bob_pubkey) requiring timestamp from config_witness
         let date_string = "\"2018-09-19T17:30:59Z\"";
         let dt: DateTime<Utc> = serde_json::from_str(&date_string).unwrap();
-        config_payer.command = WalletCommand::Pay(
+        config_payer.command = QtcCommand::Pay(
             10,
             bob_pubkey,
             Some(dt),
@@ -1189,48 +1182,47 @@ mod tests {
         let process_id = Pubkey::new(&process_id_vec);
 
         let params = json!(format!("{}", config_payer.id.pubkey()));
-        let config_payer_balance = WalletRpcRequest::GetBalance
+        let config_payer_balance = QtcRpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!(format!("{}", process_id));
-        let contract_balance = WalletRpcRequest::GetBalance
+        let contract_balance = QtcRpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(contract_balance, 11);
         let params = json!(format!("{}", bob_pubkey));
-        let recipient_balance = WalletRpcRequest::GetBalance
+        let recipient_balance = QtcRpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(recipient_balance, 0);
 
-        // Sign transaction by config_witness
-        config_witness.command = WalletCommand::TimeElapsed(bob_pubkey, process_id, dt);
+        config_witness.command = QtcCommand::TimeElapsed(bob_pubkey, process_id, dt);
         let sig_response = process_command(&config_witness);
         assert!(sig_response.is_ok());
 
         let params = json!(format!("{}", config_payer.id.pubkey()));
-        let config_payer_balance = WalletRpcRequest::GetBalance
+        let config_payer_balance = QtcRpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!(format!("{}", process_id));
-        let contract_balance = WalletRpcRequest::GetBalance
+        let contract_balance = QtcRpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(contract_balance, 1);
         let params = json!(format!("{}", bob_pubkey));
-        let recipient_balance = WalletRpcRequest::GetBalance
+        let recipient_balance = QtcRpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
@@ -1242,7 +1234,7 @@ mod tests {
     }
     #[test]
     #[ignore]
-    fn test_wallet_witness_tx() {
+    fn test_qtc_witness_tx() {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
@@ -1252,10 +1244,10 @@ mod tests {
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
         let leader_data2 = leader.info.clone();
-        let ledger_path = tmp_ledger("wallet_witness_tx", &alice);
+        let ledger_path = tmp_ledger("qtc_witness_tx", &alice);
 
-        let mut config_payer = WalletConfig::default();
-        let mut config_witness = WalletConfig::default();
+        let mut config_payer = QtcConfig::default();
+        let mut config_witness = QtcConfig::default();
         let rpc_port = 11223; // Needs to be distinct known number to not conflict with other tests
 
         let server = Fullnode::new_with_transaction_processor(
@@ -1288,8 +1280,7 @@ mod tests {
 
         let _signature = request_airdrop(&config_payer.faucet_addr, &config_payer.id.pubkey(), 50);
 
-        // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
-        config_payer.command = WalletCommand::Pay(
+        config_payer.command = QtcCommand::Pay(
             10,
             bob_pubkey,
             None,
@@ -1308,48 +1299,47 @@ mod tests {
         let process_id = Pubkey::new(&process_id_vec);
 
         let params = json!(format!("{}", config_payer.id.pubkey()));
-        let config_payer_balance = WalletRpcRequest::GetBalance
+        let config_payer_balance = QtcRpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!(format!("{}", process_id));
-        let contract_balance = WalletRpcRequest::GetBalance
+        let contract_balance = QtcRpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(contract_balance, 11);
         let params = json!(format!("{}", bob_pubkey));
-        let recipient_balance = WalletRpcRequest::GetBalance
+        let recipient_balance = QtcRpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(recipient_balance, 0);
 
-        // Sign transaction by config_witness
-        config_witness.command = WalletCommand::Witness(bob_pubkey, process_id);
+        config_witness.command = QtcCommand::Witness(bob_pubkey, process_id);
         let sig_response = process_command(&config_witness);
         assert!(sig_response.is_ok());
 
         let params = json!(format!("{}", config_payer.id.pubkey()));
-        let config_payer_balance = WalletRpcRequest::GetBalance
+        let config_payer_balance = QtcRpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!(format!("{}", process_id));
-        let contract_balance = WalletRpcRequest::GetBalance
+        let contract_balance = QtcRpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(contract_balance, 1);
         let params = json!(format!("{}", bob_pubkey));
-        let recipient_balance = WalletRpcRequest::GetBalance
+        let recipient_balance = QtcRpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
@@ -1361,7 +1351,7 @@ mod tests {
     }
     #[test]
     #[ignore]
-    fn test_wallet_cancel_tx() {
+    fn test_qtc_cancel_tx() {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
@@ -1371,10 +1361,10 @@ mod tests {
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
         let leader_data2 = leader.info.clone();
-        let ledger_path = tmp_ledger("wallet_cancel_tx", &alice);
+        let ledger_path = tmp_ledger("qtc_cancel_tx", &alice);
 
-        let mut config_payer = WalletConfig::default();
-        let mut config_witness = WalletConfig::default();
+        let mut config_payer = QtcConfig::default();
+        let mut config_witness = QtcConfig::default();
         let rpc_port = 13456; // Needs to be distinct known number to not conflict with other tests
 
         let server = Fullnode::new_with_transaction_processor(
@@ -1408,7 +1398,7 @@ mod tests {
         let _signature = request_airdrop(&config_payer.faucet_addr, &config_payer.id.pubkey(), 50);
 
         // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
-        config_payer.command = WalletCommand::Pay(
+        config_payer.command = QtcCommand::Pay(
             10,
             bob_pubkey,
             None,
@@ -1427,21 +1417,21 @@ mod tests {
         let process_id = Pubkey::new(&process_id_vec);
 
         let params = json!(format!("{}", config_payer.id.pubkey()));
-        let config_payer_balance = WalletRpcRequest::GetBalance
+        let config_payer_balance = QtcRpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!(format!("{}", process_id));
-        let contract_balance = WalletRpcRequest::GetBalance
+        let contract_balance = QtcRpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(contract_balance, 11);
         let params = json!(format!("{}", bob_pubkey));
-        let recipient_balance = WalletRpcRequest::GetBalance
+        let recipient_balance = QtcRpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
@@ -1449,26 +1439,26 @@ mod tests {
         assert_eq!(recipient_balance, 0);
 
         // Sign transaction by config_witness
-        config_payer.command = WalletCommand::Cancel(process_id);
+        config_payer.command = QtcCommand::Cancel(process_id);
         let sig_response = process_command(&config_payer);
         assert!(sig_response.is_ok());
 
         let params = json!(format!("{}", config_payer.id.pubkey()));
-        let config_payer_balance = WalletRpcRequest::GetBalance
+        let config_payer_balance = QtcRpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(config_payer_balance, 49);
         let params = json!(format!("{}", process_id));
-        let contract_balance = WalletRpcRequest::GetBalance
+        let contract_balance = QtcRpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(contract_balance, 1);
         let params = json!(format!("{}", bob_pubkey));
-        let recipient_balance = WalletRpcRequest::GetBalance
+        let recipient_balance = QtcRpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()

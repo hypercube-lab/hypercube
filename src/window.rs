@@ -1,5 +1,3 @@
-//! The `window` module defines data structure for storing the tail of the ledger.
-//!
 use counter::Counter;
 use blockthread::{BlockThread, NodeInfo};
 use entry::Entry;

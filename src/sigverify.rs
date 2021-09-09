@@ -1,9 +1,3 @@
-//! The `sigverify` module provides digital signature verification functions.
-//! By default, signatures are verified in parallel using all available CPU
-//! cores.  When `--features=cuda` is enabled, signature verification is
-//! offloaded to the GPU.
-//!
-
 use counter::Counter;
 use log::Level;
 use packet::{Packet, SharedPackets};

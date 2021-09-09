@@ -1,5 +1,3 @@
-//! The `transaction` module provides functionality for creating log transactions.
-
 use bincode::serialize;
 use hash::{Hash, Hasher};
 use signature::{Keypair, KeypairUtil, Signature};
@@ -10,40 +8,18 @@ pub const SIGNED_DATA_OFFSET: usize = size_of::<Signature>();
 pub const SIG_OFFSET: usize = 0;
 pub const PUB_KEY_OFFSET: usize = size_of::<Signature>() + size_of::<u64>();
 
-/// An instruction signed by a client with `Pubkey`.
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
-    /// A digital signature of `keys`, `program_id`, `last_id`, `fee` and `userdata`, signed by `Pubkey`.
     pub signature: Signature,
-
-    /// The `Pubkeys` that are executing this transaction userdata.  The meaning of each key is
-    /// program-specific.
-    /// * keys[0] - Typically this is the `caller` public key.  `signature` is verified with keys[0].
-    /// In the future which key pays the fee and which keys have signatures would be configurable.
-    /// * keys[1] - Typically this is the program context or the recipient of the tokens
     pub keys: Vec<Pubkey>,
-
-    /// The program code that executes this transaction is identified by the program_id.
     pub program_id: Pubkey,
-
-    /// The ID of a recent ledger entry.
     pub last_id: Hash,
-
-    /// The number of tokens paid for processing and storage of this transaction.
     pub fee: i64,
-
-    /// Userdata to be stored in the account
     pub userdata: Vec<u8>,
 }
 
 impl Transaction {
-    /// Create a signed transaction from the given `Instruction`.
-    /// * `from_keypair` - The key used to sign the transaction.  This key is stored as keys[0]
-    /// * `transaction_keys` - The keys for the transaction.  These are the program state
-    ///    instances or token recipient keys.
-    /// * `userdata` - The input data that the program will execute with
-    /// * `last_id` - The PoH hash.
-    /// * `fee` - The transaction fee.
     pub fn new(
         from_keypair: &Keypair,
         transaction_keys: &[Pubkey],
@@ -67,7 +43,7 @@ impl Transaction {
         tx
     }
 
-    /// Get the transaction data to sign.
+
     pub fn get_sign_data(&self) -> Vec<u8> {
         let mut data = serialize(&(&self.keys)).expect("serialize keys");
 
@@ -85,13 +61,12 @@ impl Transaction {
         data
     }
 
-    /// Sign this transaction.
     pub fn sign(&mut self, keypair: &Keypair) {
         let sign_data = self.get_sign_data();
         self.signature = Signature::new(keypair.sign(&sign_data).as_ref());
     }
 
-    /// Verify only the transaction signature.
+
     pub fn verify_signature(&self) -> bool {
         warn!("transaction signature verification called");
         self.signature
@@ -102,7 +77,7 @@ impl Transaction {
         &self.keys[0]
     }
 
-    // a hash of a slice of transactions only needs to hash the signatures
+
     pub fn hash(transactions: &[Transaction]) -> Hash {
         let mut hasher = Hasher::default();
         transactions
@@ -117,9 +92,6 @@ mod tests {
     use super::*;
     use bincode::serialize;
     use signature::GenKeys;
-
-    /// Detect binary changes in the serialized contract userdata, which could have a downstream
-    /// affect on SDKs and DApps
     #[test]
     fn test_sdk_serialize() {
         let keypair = &GenKeys::new([0u8; 32]).gen_n_keypairs(1)[0];

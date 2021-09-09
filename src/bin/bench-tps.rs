@@ -23,7 +23,7 @@ use hypercube::builtin_tansaction::SystemTransaction;
 use hypercube::thin_client::{poll_gossip_for_leader, ThinClient};
 use hypercube::timing::{duration_as_ms, duration_as_s};
 use hypercube::transaction::Transaction;
-use hypercube::wallet::request_airdrop;
+use hypercube::qtc::request_airdrop;
 use hypercube::window::default_window;
 use std::collections::VecDeque;
 use std::net::SocketAddr;

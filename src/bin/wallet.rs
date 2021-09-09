@@ -10,14 +10,14 @@ use hypercube::logger;
 use hypercube::rpc::RPC_PORT;
 use hypercube::signature::{read_keypair, KeypairUtil};
 use hypercube::thin_client::poll_gossip_for_leader;
-use hypercube::wallet::{gen_keypair_file, parse_command, process_command, WalletConfig, WalletError};
+use hypercube::qtc::{gen_keypair_file, parse_command, process_command, QtcConfig, QtcError};
 use std::error;
 use std::net::SocketAddr;
 
-pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error>> {
+pub fn parse_args(matches: &ArgMatches) -> Result<QtcConfig, Box<error::Error>> {
     let network = if let Some(addr) = matches.value_of("network") {
         addr.parse().or_else(|_| {
-            Err(WalletError::BadParameter(
+            Err(QtcError::BadParameter(
                 "Invalid network location".to_string(),
             ))
         })?
@@ -43,7 +43,7 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
         path.to_str().unwrap()
     };
     let id = read_keypair(id_path).or_else(|err| {
-        Err(WalletError::BadParameter(format!(
+        Err(QtcError::BadParameter(format!(
             "{}: Unable to open keypair file: {}",
             err, id_path
         )))
@@ -69,7 +69,7 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
 
     let command = parse_command(id.pubkey(), &matches)?;
 
-    Ok(WalletConfig {
+    Ok(QtcConfig {
         leader,
         id,
         faucet_addr, // TODO: Add an option for this.
@@ -80,7 +80,7 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
 
 fn main() -> Result<(), Box<error::Error>> {
     logger::setup();
-    let matches = App::new("hypercube-wallet")
+    let matches = App::new("hypercube-qtc")
         .version(crate_version!())
         .arg(
             Arg::with_name("network")
