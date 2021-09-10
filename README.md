@@ -37,7 +37,9 @@ The PoD consensus + XPZ public chain helps Ethereum increase network transaction
 
 HyperCube is developed by HyperCube Lab. HyperCube Lab is responsible for designing, coding and maintaining the HyperCube code base. 
 
-HyperCube Lab is a DAO organization.
+HyperCube Lab is a DAO organization which is funded and guided by Apex Dex Foundation (ADF). 
+
+ADF is a non-profit organization dedicated to supporting blockchain and other technology for the well-being of entire human race.
 
 #  Origin of HyperCube
 
@@ -66,7 +68,7 @@ After XPZ upgrades the perpetual storage network, large-scale on-chain low-cost 
 
 * Athena SDK can provide fast casting NFT, low-cost digital art creation
 
-* Anonymous social + OTC + qtc, XPZ qtc supports anonymous social, OTC and token storage, facilitating quick realization of NFT creators, and supporting the issuance of social tokens and personal NFT works
+* Anonymous social application. HyperCube provides an inhouse built application called QuntumnChat, which provides Decentralized IDentifier, On-Chain Messaging, QuntumnChat supports anonymous social, OTC and token storage, facilitating quick realization of NFT creators, and supporting the issuance of social tokens and personal NFT works
 
 * XPZ supports a hybrid on-chain transaction engine based on order books and automated market makers, which can help DeFi to be implemented on a large scale
 
