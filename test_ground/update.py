@@ -1,17 +1,5 @@
-import datetime
 import os
-
-
-def modify():
-    file = open('zero.md', 'r')
-    flag = int(file.readline()) == 0
-    file.close()
-    file = open('zero.md', 'w+')
-    if flag:
-        file.write('1')
-    else:
-        file.write('0')
-        file.close()
+import datetime
 
 
 def loopfile():
@@ -32,10 +20,10 @@ def loopfile():
                 print(last_line)
                 file_object.close()
                 # If the file is updated in the last cycle
-                if last_line == " 01":
+                if last_line == "#999":
                     remove_999(filename)
-                # else:
-                    # append_999(filename)
+                else:
+                    append_999(filename)
 
         else:
             continue
@@ -72,18 +60,7 @@ def set_sys_time(year, month, day):
     os.system('date -s %04d%02d%02d' % (year, month, day))
 
 
-def trick_commit(year, month, day):
-    set_sys_time(year, month, day)
-    modify()
-    commit()
-
-
-def daily_commit(start_date, end_date):
-    for i in range((end_date - start_date).days + 1):
-        cur_date = start_date + datetime.timedelta(days=i)
-        trick_commit(cur_date.year, cur_date.month, cur_date.day)
-
-
 if __name__ == '__main__':
-    # daily_commit(datetime.date(2017, 8, 31), datetime.date(2017, 12, 28))
+    # set_sys_time(2017, 1, 1)
     loopfile()
+    # commit()
