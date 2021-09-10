@@ -88,7 +88,7 @@ For general inquaries
 
 HyperCube is designed as the next generation infrascture for Metaverse and AI. 
 
-SuperFulx Quntumn (SQ) is formed by ADF, and SQ will be responsible for promoting blockchain technology in a global scale, to make mass adoption of blockchain possible.
+SuperFulx Quntumn (SQ) is formed by Apex Dex Foundation (ADF), and SQ will be responsible for promoting blockchain technology in a global scale, to make mass adoption of blockchain possible.
 
 # Vault
 
