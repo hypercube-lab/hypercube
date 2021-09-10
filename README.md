@@ -88,7 +88,7 @@ For general inquaries
 
 HyperCube is designed as the next generation infrascture for Metaverse and AI. 
 
-In order to prompot HyperCube technology and making mass adoption of blockchain technology possbile, SuperFulx Quntumn (SQ) is formed by Apex Dex Foundation (ADF).  
+In order to prompot HyperCube technology and making mass adoption of blockchain technology possbile, SuperFulx Quntumn (SQ) is formed by Apex Dex Foundation (ADF). SQ is not actively researching various key technology using blockchain technology, for which will be disclosed 
 
 In our vision, HyperCube will be widely used as a key infrastructure for various industries, like Finance, Manufacturing, Transportation, Entertainment and Goverment, providing vital support of computing power and storage capability.
 
@@ -102,7 +102,7 @@ The purpose of these 210 million XPZ is to help stabilize and grow the XPZ econo
 
 HyperCube has no ICO plans.
 
-Instead, SQ wants to list the company's stock on an American exchange. Using well-known corporate controls, we may make enforceable assertions regarding how SQ intends to use the Vault. The XPZ token is a utility token, not an investment opportunity. SQ plans to do a fully compliant SEC registered stock IPO as soon as mainnet is launched.
+SQ wants the company's equity listed on an American exchange. We can make enforceable representations about how SQ intends to utilize the Vault using corporate controls. XPZ is a utility token, not an investment. So when mainnet launches, SQ aims to undertake an SEC registered stock IPO.
 
 ***
 
