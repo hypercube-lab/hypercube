@@ -10,10 +10,9 @@
 [![codecov](https://codecov.io/gh/hypercube-lab/hypercube/branch/master/graph/badge.svg)](https://codecov.io/gh/hypercube-lab/hypercube)
 
 
-# XPZ Public Chain
+# What is HyperCube
 
 HyperCube is a free and open source blockchain project for everyone to use.
-
 
 
 [HyperCube Wiki](https://github.com/hypercube-lab/hypercube/wiki)
@@ -22,11 +21,11 @@ HyperCube is a free and open source blockchain project for everyone to use.
 
 
 
-## Wha is HyperCube
+# What does HyperCube Do?
 
 HyperCube is an Ethereum 2-layer solution based on proof of POD dedication and an independent public chain.
 
-## Formal State
+# What Consensus Algorithm does HyperCube use?
 
 HyperCube's network is an independent public chain written in Rust language based on PoD consensus.
 
@@ -34,21 +33,30 @@ PoD is a new network consensus algorithm based on a hybrid consensus of PoW (ETH
 
 The PoD consensus + XPZ public chain helps Ethereum increase network transaction speed and reduce Gas fees. At the same time, the introduction of the EVERNET permanent storage network can provide decentralized permanent storage space for financial infrastructure, the Internet of Things, and the Internet.
 
+# Who is behind HyperCube?
 
-## XPZ Mining Rig
+HyperCube is developed by HyperCube Lab. HyperCube Lab is responsible for designing, coding and maintaining the HyperCube code base. 
 
-XPZ mining machine is based on the dual-core mining mode of Nvdia and AMD. Based on the special structure of PoD, XPZ can conduct joint mining with ETH, which saves energy and achieves the goal of carbon neutrality on the chain.
+HyperCube Lab is a DAO organization.
 
-After XPZ upgrades the perpetual storage network, large-scale on-chain low-cost storage can be realized, which provides a guarantee for permanent storage of data by facilitating hard disk storage space.
-
-## Origin of HyperCube
+#  Origin of HyperCube
 
 The XPZ development team is guided by multiple Turing Award winners as consultants, and the Ethereum technical team guides the development. Grayscale and Coinbase fragments. XPZ, under the joint promotion of many geek technology enthusiasts and teams around the world, actively explores the new Ethereum The road to expansion.
 
 The XPZ (full name HyperCube) public chain supports large-scale, multi-threaded, multi-concurrent network computing and storage capabilities such as NFT casting, social tokens, DeFi, and financial applications.
 
+# Who to Participate in HyperCube?
 
-## Core Advantages of HyperCube
+As HyperCube is under active development, and is going to release a testnet, for now the eaiest way to participate is running an HyperCube node.
+
+#  HyperCube Node Rig
+
+All the underlying infrastructure of HyperCube is powered by nodes, aka miners. User can use household machine to run a XPZ node. All XPZ miner is based on the dual-core mining mode of Nvdia and AMD. Based on the special structure of PoD, XPZ can conduct joint mining with ETH, which saves energy and achieves the goal of carbon neutrality on the chain.
+
+After XPZ upgrades the perpetual storage network, large-scale on-chain low-cost storage can be realized, which provides a guarantee for permanent storage of data by facilitating hard disk storage space.
+
+
+#  Core Advantages of HyperCube
 
 * Support game financial GameFi, chain games, decentralized financial DeFi, XPZ system built-in Athena SDK, can help develop the rapid development of GameFi and DeFi products.
 
@@ -68,7 +76,27 @@ The XPZ (full name HyperCube) public chain supports large-scale, multi-threaded,
 
 * Traditional American capital includes endorsement
 
+# Contact
 
+For academia collabration, please feel free to contact us at hypercube-lab@apexdex.fund.
+
+For general inquaries
+
+# Future of HyperCube
+
+HyperCube is designed as the next generation infrascture for Metaverse and AI. 
+
+SuperFulx Quntumn (SQ) is formed by ADF, and SQ will be responsible for promoting blockchain technology in a global scale, to make mass adoption of blockchain possible.
+
+# Vault
+
+HyperCube will pre-farm a 210 million of XPZ at network launch to help stabilize and grow the XPZ economy through DAO governance model. For the 210 million XPZ, 90% will be frozen until 2031.
+
+# Regarding ICO
+
+HyperCube has no ICO plans.
+
+Instead, SuperFulx wants to list the company's stock on an American exchange. Using well-known corporate controls, we may make enforceable assertions regarding how SQ intends to use the Vault. The XPZ token is a utility token, not an investment opportunity. SQ plans to do a fully compliant SEC registered stock IPO as soon as mainnet is launched.
 
 ***
 
