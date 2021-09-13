@@ -80,9 +80,11 @@ After XPZ upgrades the perpetual storage network, large-scale on-chain low-cost 
 
 # Contact
 
-For academia collabration, please feel free to contact us at hypercube-lab@apexdex.fund.
+For academia inquiries, please feel free to contact us at hypercube-lab@apexdex.fund.
 
-For general inquaries
+For general inquiries, please feel to contact us at team@hypercube-lab.org
+
+For business inquiries, please contact at info@sqtech.com
 
 # Future of HyperCube
 
