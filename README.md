@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://hypercube-lab.github.io">
-    <img alt="HyperCube" src="https://i.imgur.com/dzLBBXJ.png" width="250" />
+    <img alt="HyperCube" src="https://i.imgur.com/N4NsDhi.png" width="250" />
   </a>
 </p>
 
