@@ -1,8 +1,8 @@
-<p align="center">
-  <a href="https://hypercube-lab.github.io">
-    <img alt="HyperCube" src="https://i.imgur.com/N4NsDhi.png" width="250" />
-  </a>
-</p>
+<div align="center">
+  <h1> HyperCube Core </h1>
+</div>
+
+![banner](https://i.imgur.com/N4NsDhi.png)
 
 [![HyperCube crate](https://img.shields.io/crates/v/hypercube.svg)](https://crates.io/crates/hypercube)
 [![HyperCube documentation](https://docs.rs/hypercube-lab/badge.svg)](https://docs.rs/hypercu)
