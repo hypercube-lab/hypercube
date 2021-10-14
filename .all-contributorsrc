@@ -81,6 +81,17 @@
         "test",
         "code"
       ]
+    },
+    {
+      "login": "008miller",
+      "name": "Nick Johnson (nick.eth)",
+      "avatar_url": "https://avatars.githubusercontent.com/u/90389275?v=4",
+      "profile": "https://github.com/008miller",
+      "contributions": [
+        "infra",
+        "test",
+        "code"
+      ]
     }
   ],
   "contributorsPerLine": 7,
