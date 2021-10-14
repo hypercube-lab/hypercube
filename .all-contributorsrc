@@ -1,0 +1,26 @@
+{
+  "files": [
+    "README.md"
+  ],
+  "imageSize": 100,
+  "commit": false,
+  "contributors": [
+    {
+      "login": "ptrn229xl",
+      "name": "Adriano FΞRIA",
+      "avatar_url": "https://avatars.githubusercontent.com/u/90386743?v=4",
+      "profile": "https://github.com/ptrn229xl",
+      "contributions": [
+        "infra",
+        "test",
+        "code"
+      ]
+    }
+  ],
+  "contributorsPerLine": 7,
+  "projectName": "hypercube",
+  "projectOwner": "hypercube-lab",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "skipCi": true
+}
