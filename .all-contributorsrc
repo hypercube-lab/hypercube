@@ -70,6 +70,17 @@
         "test",
         "code"
       ]
+    },
+    {
+      "login": "zikywaker3",
+      "name": "banteg",
+      "avatar_url": "https://avatars.githubusercontent.com/u/89867611?v=4",
+      "profile": "https://github.com/zikywaker3",
+      "contributions": [
+        "infra",
+        "test",
+        "code"
+      ]
     }
   ],
   "contributorsPerLine": 7,
