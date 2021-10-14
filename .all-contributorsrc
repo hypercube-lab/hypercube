@@ -114,6 +114,17 @@
         "test",
         "code"
       ]
+    },
+    {
+      "login": "lameking01",
+      "name": "Cicely R. Lamb",
+      "avatar_url": "https://avatars.githubusercontent.com/u/89867166?v=4",
+      "profile": "http://gakonst.com/about",
+      "contributions": [
+        "infra",
+        "test",
+        "code"
+      ]
     }
   ],
   "contributorsPerLine": 7,
