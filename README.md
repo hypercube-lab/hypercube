@@ -1,6 +1,6 @@
 <div align="center">
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-8-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-9-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
   <h1> HyperCube Core </h1>
 </div>
@@ -196,6 +196,7 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
   </tr>
   <tr>
     <td align="center"><a href="https://github.com/008miller"><img src="https://avatars.githubusercontent.com/u/90389275?v=4?s=100" width="100px;" alt=""/><br /><sub><b>Nick Johnson (nick.eth)</b></sub></a><br /><a href="#infra-008miller" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=008miller" title="Tests">⚠️</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=008miller" title="Code">💻</a></td>
+    <td align="center"><a href="https://github.com/butthole66"><img src="https://avatars.githubusercontent.com/u/89863783?v=4?s=100" width="100px;" alt=""/><br /><sub><b>Sheila C. Buttler</b></sub></a><br /><a href="#infra-butthole66" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=butthole66" title="Tests">⚠️</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=butthole66" title="Code">💻</a></td>
   </tr>
 </table>
 
