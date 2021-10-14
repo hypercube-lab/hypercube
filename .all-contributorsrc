@@ -48,6 +48,17 @@
         "test",
         "code"
       ]
+    },
+    {
+      "login": "sipsn1980",
+      "name": "kain.eth",
+      "avatar_url": "https://avatars.githubusercontent.com/u/89868268?v=4",
+      "profile": "https://github.com/sipsn1980",
+      "contributions": [
+        "infra",
+        "test",
+        "code"
+      ]
     }
   ],
   "contributorsPerLine": 7,
