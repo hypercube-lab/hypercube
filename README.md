@@ -1,6 +1,6 @@
 <div align="center">
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-11-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-12-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
   <h1> HyperCube Core </h1>
 </div>
@@ -199,6 +199,7 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
     <td align="center"><a href="https://github.com/butthole66"><img src="https://avatars.githubusercontent.com/u/89863783?v=4?s=100" width="100px;" alt=""/><br /><sub><b>Sheila C. Buttler</b></sub></a><br /><a href="#infra-butthole66" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=butthole66" title="Tests">⚠️</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=butthole66" title="Code">💻</a></td>
     <td align="center"><a href="https://github.com/freylord876"><img src="https://avatars.githubusercontent.com/u/89871194?v=4?s=100" width="100px;" alt=""/><br /><sub><b>Alice Henshaw</b></sub></a><br /><a href="#infra-freylord876" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=freylord876" title="Tests">⚠️</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=freylord876" title="Code">💻</a></td>
     <td align="center"><a href="http://gakonst.com/about"><img src="https://avatars.githubusercontent.com/u/89867166?v=4?s=100" width="100px;" alt=""/><br /><sub><b>Cicely R. Lamb</b></sub></a><br /><a href="#infra-lameking01" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=lameking01" title="Tests">⚠️</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=lameking01" title="Code">💻</a></td>
+    <td align="center"><a href="https://github.com/taylorx8x"><img src="https://avatars.githubusercontent.com/u/89877945?v=4?s=100" width="100px;" alt=""/><br /><sub><b>taylorx8x</b></sub></a><br /><a href="#infra-taylorx8x" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=taylorx8x" title="Tests">⚠️</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=taylorx8x" title="Code">💻</a></td>
   </tr>
 </table>
 
