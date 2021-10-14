@@ -26,6 +26,17 @@
         "test",
         "code"
       ]
+    },
+    {
+      "login": "alexandria999eth",
+      "name": "Alexandria Figueroa",
+      "avatar_url": "https://avatars.githubusercontent.com/u/89384572?v=4",
+      "profile": "https://github.com/alexandria999eth",
+      "contributions": [
+        "infra",
+        "test",
+        "code"
+      ]
     }
   ],
   "contributorsPerLine": 7,
