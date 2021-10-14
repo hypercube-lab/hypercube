@@ -103,6 +103,17 @@
         "test",
         "code"
       ]
+    },
+    {
+      "login": "freylord876",
+      "name": "Alice Henshaw",
+      "avatar_url": "https://avatars.githubusercontent.com/u/89871194?v=4",
+      "profile": "https://github.com/freylord876",
+      "contributions": [
+        "infra",
+        "test",
+        "code"
+      ]
     }
   ],
   "contributorsPerLine": 7,
