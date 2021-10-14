@@ -92,6 +92,17 @@
         "test",
         "code"
       ]
+    },
+    {
+      "login": "butthole66",
+      "name": "Sheila C. Buttler",
+      "avatar_url": "https://avatars.githubusercontent.com/u/89863783?v=4",
+      "profile": "https://github.com/butthole66",
+      "contributions": [
+        "infra",
+        "test",
+        "code"
+      ]
     }
   ],
   "contributorsPerLine": 7,
