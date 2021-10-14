@@ -15,6 +15,17 @@
         "test",
         "code"
       ]
+    },
+    {
+      "login": "hypercube-lab",
+      "name": "HyperCube Lab",
+      "avatar_url": "https://avatars.githubusercontent.com/u/89606428?v=4",
+      "profile": "https://github.com/hypercube-lab",
+      "contributions": [
+        "infra",
+        "test",
+        "code"
+      ]
     }
   ],
   "contributorsPerLine": 7,

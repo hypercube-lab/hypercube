@@ -1,6 +1,6 @@
 <div align="center">
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
   <h1> HyperCube Core </h1>
 </div>
@@ -187,6 +187,7 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
 <table>
   <tr>
     <td align="center"><a href="https://github.com/ptrn229xl"><img src="https://avatars.githubusercontent.com/u/90386743?v=4?s=100" width="100px;" alt=""/><br /><sub><b>Adriano FΞRIA</b></sub></a><br /><a href="#infra-ptrn229xl" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=ptrn229xl" title="Tests">⚠️</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=ptrn229xl" title="Code">💻</a></td>
+    <td align="center"><a href="https://github.com/hypercube-lab"><img src="https://avatars.githubusercontent.com/u/89606428?v=4?s=100" width="100px;" alt=""/><br /><sub><b>HyperCube Lab</b></sub></a><br /><a href="#infra-hypercube-lab" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=hypercube-lab" title="Tests">⚠️</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=hypercube-lab" title="Code">💻</a></td>
   </tr>
 </table>
 
