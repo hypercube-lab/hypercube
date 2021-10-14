@@ -1,6 +1,6 @@
 <div align="center">
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-4-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-5-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
   <h1> HyperCube Core </h1>
 </div>
@@ -190,6 +190,7 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
     <td align="center"><a href="https://github.com/hypercube-lab"><img src="https://avatars.githubusercontent.com/u/89606428?v=4?s=100" width="100px;" alt=""/><br /><sub><b>HyperCube Lab</b></sub></a><br /><a href="#infra-hypercube-lab" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=hypercube-lab" title="Tests">⚠️</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=hypercube-lab" title="Code">💻</a></td>
     <td align="center"><a href="https://github.com/alexandria999eth"><img src="https://avatars.githubusercontent.com/u/89384572?v=4?s=100" width="100px;" alt=""/><br /><sub><b>Alexandria Figueroa</b></sub></a><br /><a href="#infra-alexandria999eth" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=alexandria999eth" title="Tests">⚠️</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=alexandria999eth" title="Code">💻</a></td>
     <td align="center"><a href="http://Casimira G. Conroy"><img src="https://avatars.githubusercontent.com/u/89609148?v=4?s=100" width="100px;" alt=""/><br /><sub><b>Casimira G. Conroy</b></sub></a><br /><a href="#infra-agnitazudkll" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=agnitazudkll" title="Tests">⚠️</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=agnitazudkll" title="Code">💻</a></td>
+    <td align="center"><a href="https://github.com/sipsn1980"><img src="https://avatars.githubusercontent.com/u/89868268?v=4?s=100" width="100px;" alt=""/><br /><sub><b>kain.eth</b></sub></a><br /><a href="#infra-sipsn1980" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=sipsn1980" title="Tests">⚠️</a> <a href="https://github.com/hypercube-lab/hypercube/commits?author=sipsn1980" title="Code">💻</a></td>
   </tr>
 </table>
 
