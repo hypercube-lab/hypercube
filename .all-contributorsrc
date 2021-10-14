@@ -37,6 +37,17 @@
         "test",
         "code"
       ]
+    },
+    {
+      "login": "agnitazudkll",
+      "name": "Casimira G. Conroy",
+      "avatar_url": "https://avatars.githubusercontent.com/u/89609148?v=4",
+      "profile": "http://Casimira G. Conroy",
+      "contributions": [
+        "infra",
+        "test",
+        "code"
+      ]
     }
   ],
   "contributorsPerLine": 7,
